@@ -62,9 +62,10 @@ public class Driver {
 		final Node node = new Node(totalNodes, port, hostNames, myID, recovery);
 		
 		// set up this node's serverSocket that continuously listens for other nodes on a new thread
-		Runnable listenThread = new Runnable(){
+		// this is for listen for TCP packets for leader election stuff
+		Runnable tcpThread = new Runnable(){
 			public synchronized void run() {
-				System.out.println("Start listening for other nodes");
+				System.out.println("Start listening for other nodes, TCP");
 				ServerSocket serverSocket;
 		        try {
 		        	serverSocket = new ServerSocket(port);
@@ -86,7 +87,36 @@ public class Driver {
 				}
 			}
 		};
-		new Thread(listenThread).start();
+		new Thread(tcpThread).start();
+        
+		// set up datagram stuff to listen for UDP for Paxos communication
+		Runnable udpThread = new Runnable(){
+			public synchronized void run() {
+				System.out.println("Start listening for other nodes, UDP");
+				DatagramSocket socket;
+		        try {
+		        	socket = new DatagramSocket(port);
+		            while (true) {
+		            	byte[] buf = new byte[256];  // TODO change size to appropriate size later
+		            	DatagramPacket packet = new DatagramPacket(buf, buf.length);
+		            	socket.receive(packet);
+		            	Runnable runnable = new Runnable() {
+		                    public synchronized void run() {
+		                        // TODO pass packet to node object
+		                    }
+		                };
+		                new Thread(runnable).start();
+		                
+		            }
+		        } 
+		        catch (IOException e) {
+					 System.out.println("Exception caught when trying to listen on port " + port);
+				    System.out.println(e.getMessage());
+					e.printStackTrace();
+				}
+			}
+		};
+		new Thread(udpThread).start();
         
 		// loop to ask about adding, deleting, viewing appointments
 		while(true){
