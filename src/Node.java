@@ -14,6 +14,8 @@ public class Node {
 	private int numNodes; 
 	private String logName;
 	private String stateLog;
+	private int maxPrepare;
+	private int accNum;
 	
 	// variables that need to be concerned with synchronization
 	private Object lock = new Object();
@@ -51,7 +53,7 @@ public class Node {
 		this.numNodes = totalNodes;
 		this.port = port;
 		this.hostNames = hostNames;
-		
+		this.maxPrepare = 0;
 		this.calendars = new int[totalNodes][7][48];
 		
 		this.currentAppts = new HashSet<Appointment>();  // dictionary
@@ -677,5 +679,34 @@ public class Node {
 		badAppts.clear();
 	}
 
-
+	/**
+	 * Determine message type and forward to appropriate function
+	 * 
+	 * @param packet UDP packet received from another node
+	 */
+	public void receivePacket(DatagramPacket packet){
+		
+	}
+	
+	/**
+	 * received a prepare msg from another node
+	 * @param m
+	 * @param logPos
+	 */
+	public void prepare(int m, int logPos){
+		if (m > maxPrepare){
+			maxPrepare = m;
+			//TODO send reply with accNum, accVal
+		}
+	}
+	
+	/** received promise msg from another node
+	 * 
+	 * @param accNum accepted proposal number
+	 * @param accVal accepted value
+	 */
+	public void promise(int accNum, LogEntry accVal){
+		
+	}
+	
 }
