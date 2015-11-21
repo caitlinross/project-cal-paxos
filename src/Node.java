@@ -18,12 +18,9 @@ public class Node {
 	// variables that need to be concerned with synchronization
 	private Object lock = new Object();
 	private int calendars[][][];
-	private Set<EventRecord> PL;
-	private Set<EventRecord> NE;
-	private Set<EventRecord> NP;
+	
 	private Set<Appointment> currentAppts;
-	private int T[][];
-	private int c;
+
 	private boolean sendFail[];
 	private boolean cantSched;
 	private Set<Appointment> badAppts;
@@ -56,13 +53,10 @@ public class Node {
 		this.hostNames = hostNames;
 		
 		this.calendars = new int[totalNodes][7][48];
-		this.PL = new HashSet<EventRecord>();
-		this.NE = new HashSet<EventRecord>();
-		this.NP = new HashSet<EventRecord>();
+		
 		this.currentAppts = new HashSet<Appointment>();  // dictionary
 		this.badAppts = new HashSet<Appointment>();
-		this.T = new int[totalNodes][totalNodes];
-		this.c = 0;
+
 		this.sendFail = new boolean[this.numNodes];
 		for (int i = 0; i < sendFail.length; i++){
 			sendFail[i] = false;
@@ -130,7 +124,7 @@ public class Node {
 				time++;
 			}
 			newAppt = new Appointment(name, day, start, end, sAMPM, eAMPM, nodes, this.nodeId);
-			insert(newAppt);
+		
 		}
 		
 		// appointment involves other nodes besides itself; need to send messages
@@ -161,7 +155,7 @@ public class Node {
 			//delete appointment have to do outside iterating on currentAppts
 			// because delete() deletes from currentAppts collection
 			if (delAppt != null){
-				delete(delAppt);
+				
 				
 				//clear calendar
 				for (Integer id:delAppt.getParticipants()) {
@@ -188,7 +182,7 @@ public class Node {
 	 * @param notifyingNode the node that notified about the conflict
 	 */
 	public void deleteOldAppointment(Appointment appt, int notifyingNode) {
-		delete(appt);
+	
 		for (Integer node:appt.getParticipants()){
 			if (node != notifyingNode && node != this.nodeId){
 				sendCancellationMsg(appt, node);
@@ -240,8 +234,8 @@ public class Node {
 	 *  write an event to the log
 	 * @param eR the event record to write to log
 	 */
-	public void writeToLog(EventRecord eR){
-		try{
+	public void writeToLog(){
+		/*try{
 			FileWriter fw = new FileWriter(this.logName, true);
 			BufferedWriter bw = new BufferedWriter(fw);
 			bw.write("------- new event record -------\n");
@@ -268,7 +262,7 @@ public class Node {
 		}
 		catch (IOException e){
 			e.printStackTrace();
-		}
+		}*/
 	}
 	
 	/**
@@ -278,11 +272,6 @@ public class Node {
 		try{
 			FileWriter fw = new FileWriter("nodestate.txt", false);  // overwrite each time
 			BufferedWriter bw = new BufferedWriter(fw);
-			
-			// line 1: c
-			synchronized(lock){
-				bw.write(this.c + "," + Appointment.getApptNo() + "\n");
-			}
 			
 			// then save the 2D calendar array for each node
 			synchronized(lock){
@@ -298,61 +287,10 @@ public class Node {
 				}
 			}
 			
-			// save T
-			synchronized(lock){
-				for (int i = 0; i < this.T.length; i++){
-					for (int j = 0; j < this.T[i].length; j++){
-						bw.write(Integer.toString(this.T[i][j]));
-						if (j != this.T[i].length - 1){
-							bw.write(",");
-						}
-					}
-					bw.write("\n");
-				}
-			}
-			
 			// save events in NP, PL, NE, currentAppts in following format:
 			// operation, time, nodeID, appt name, day, start, end, sAMPM, eAMPM, apptID, participants
 			// for days, use ordinals of enums,
 			synchronized(lock){
-				bw.write("NP," + NP.size() + "\n");
-				for (EventRecord eR:NP){
-					bw.write(eR.getOperation() + "," + eR.getTime() + "," + eR.getNodeId() + "," + eR.getAppointment().getName() + "," + eR.getAppointment().getDay().ordinal() + ","
-							+ eR.getAppointment().getStart() + "," + eR.getAppointment().getEnd() + "," + eR.getAppointment().getsAMPM() + "," + eR.getAppointment().geteAMPM() + "," 
-							+ eR.getAppointment().getApptID() + ",");
-					for (int i = 0; i < eR.getAppointment().getParticipants().size(); i++){
-						bw.write(Integer.toString(eR.getAppointment().getParticipants().get(i)));
-						if (i != eR.getAppointment().getParticipants().size() - 1)
-							bw.write(",");
-					}
-					bw.write("\n");
-				}
-				
-				bw.write("PL," + PL.size() + "\n");
-				for (EventRecord eR:PL){
-					bw.write(eR.getOperation() + "," + eR.getTime() + "," + eR.getNodeId() + "," + eR.getAppointment().getName() + "," + eR.getAppointment().getDay().ordinal() + ","
-							+ eR.getAppointment().getStart() + "," + eR.getAppointment().getEnd() + "," + eR.getAppointment().getsAMPM() + "," + eR.getAppointment().geteAMPM() + ","
-							+ eR.getAppointment().getApptID() + ",");
-					for (int i = 0; i < eR.getAppointment().getParticipants().size(); i++){
-						bw.write(Integer.toString(eR.getAppointment().getParticipants().get(i)));
-						if (i != eR.getAppointment().getParticipants().size() - 1)
-							bw.write(",");
-					}
-					bw.write("\n");
-				}
-				
-				bw.write("NE," + NE.size() + "\n");
-				for (EventRecord eR:NE){
-					bw.write(eR.getOperation() + "," + eR.getTime() + "," + eR.getNodeId() + "," + eR.getAppointment().getName() + "," + eR.getAppointment().getDay().ordinal() + ","
-							+ eR.getAppointment().getStart() + "," + eR.getAppointment().getEnd() + "," + eR.getAppointment().getsAMPM() + "," + eR.getAppointment().geteAMPM() + ","
-							+ eR.getAppointment().getApptID() + ",");
-					for (int i = 0; i < eR.getAppointment().getParticipants().size(); i++){
-						bw.write(Integer.toString(eR.getAppointment().getParticipants().get(i)));
-						if (i != eR.getAppointment().getParticipants().size() - 1)
-							bw.write(",");
-					}
-					bw.write("\n");
-				}
 				
 				bw.write("current," + currentAppts.size() + "\n");
 				for (Appointment appt:currentAppts){
@@ -390,7 +328,7 @@ public class Node {
 		    while ((text = reader.readLine()) != null) {
 		    	String[] parts = text.split(",");
 		        if (lineNo == 0){ // restore node clock
-		        	this.c = Integer.parseInt(parts[0]);
+
 		        	Appointment.setApptNo(Integer.parseInt(parts[1]));
 		        }
 		        else if (lineNo > 0 && lineNo <= 7*numNodes ){ // restore calendar
@@ -405,9 +343,7 @@ public class Node {
 		        	}
 		        }
 		        else if (lineNo > 7*numNodes && lineNo <= tLimit){ // restore T
-		        	for (int i = 0; i < this.T.length; i++){
-		        		T[index][i] = Integer.parseInt(parts[i]);
-		        	}
+		        	
 		        	index++;
 		        }
 		        else if (lineNo == tLimit + 1){ 
@@ -420,8 +356,7 @@ public class Node {
 		        		list.add(Integer.parseInt(parts[i]));
 		        	Appointment appt = new Appointment(parts[3], Day.values()[Integer.parseInt(parts[4])], Integer.parseInt(parts[5]), Integer.parseInt(parts[6]), 
 		        			parts[7], parts[8], parts[9], list, this.nodeId);
-		        	EventRecord eR = new EventRecord(parts[0], Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), appt);
-		        	NP.add(eR);
+		        	
 		        	
 		        }
 		        else if (lineNo == npLimit + 1){
@@ -434,8 +369,7 @@ public class Node {
 		        		list.add(Integer.parseInt(parts[i]));
 		        	Appointment appt = new Appointment(parts[3], Day.values()[Integer.parseInt(parts[4])], Integer.parseInt(parts[5]), Integer.parseInt(parts[6]), 
 		        			parts[7], parts[8], parts[9], list, this.nodeId);
-		        	EventRecord eR = new EventRecord(parts[0], Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), appt);
-		        	PL.add(eR);
+		        	
 		        }
 		        else if (lineNo == plLimit + 1){
 		        	numNE = Integer.parseInt(parts[1]);
@@ -447,8 +381,7 @@ public class Node {
 		        		list.add(Integer.parseInt(parts[i]));
 		        	Appointment appt = new Appointment(parts[3], Day.values()[Integer.parseInt(parts[4])], Integer.parseInt(parts[5]), Integer.parseInt(parts[6]), 
 		        			parts[7], parts[8], parts[9], list, this.nodeId);
-		        	EventRecord eR = new EventRecord(parts[0], Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), appt);
-		        	NE.add(eR);
+		        	
 		        }
 		        else if (lineNo == neLimit + 1){
 		        	numAppt = Integer.parseInt(parts[1]);
@@ -472,71 +405,13 @@ public class Node {
 		}
 	}
 	
-	/**
-	 *  insert appointment into dictionary
-	 * @param appt appointment to be inserted
-	 */
-	public void insert(Appointment appt){
-		this.c++;
-		this.T[this.nodeId][this.nodeId] = c;
-		EventRecord eR = new EventRecord("insert", c, nodeId, appt);
-		writeToLog(eR);
-		synchronized(lock){
-			PL.add(eR);
-			currentAppts.add(appt);
-			saveNodeState();
-		}
-	}
-	
-	/**
-	 *  delete appointment from dictionary
-	 * @param appt appointment to be deleted
-	 */
-	public void delete(Appointment appt){
-		this.c++;
-		this.T[this.nodeId][this.nodeId] = c;
-		EventRecord eR = new EventRecord("delete", c, nodeId, appt);
-		writeToLog(eR);
-		synchronized(lock){
-			PL.add(eR);
-			Appointment delAppt = null;
-			for (Appointment a:currentAppts){
-				if (a.getApptID().equals(appt.getApptID())){
-					delAppt = a;
-				}
-			}
-			if (delAppt != null)
-				currentAppts.remove(delAppt);
-			saveNodeState();
-		}
-	}
-	
-	/**
-	 *  checks if we know if node k has learned about event e
-	 * @param Ti T matrix from node k
-	 * @param eR event record to check
-	 * @param k node id we want to check our knowledge of
-	 * @return true when we know that site k knows about this event
-	 */
-	public boolean hasRec(int Ti[][], EventRecord eR, int k){		
-		return Ti[k][eR.getNodeId()] >= eR.getTime();
-	}
 	
 	/**
 	 *  creates NP, then sends <NP, T> to node k
 	 * @param k node to send to
 	 */
 	public void send(final int k){
-		// create NP to send
-		NP.clear();
-		synchronized(lock){
-			for (EventRecord eR:PL){
-				if (!hasRec(this.T, eR, k)){
-					NP.add(eR);
-				}
-			}
-			saveNodeState();
-		}
+		
 		
 		// now send NP
 		try {
@@ -544,10 +419,7 @@ public class Node {
 			OutputStream out = socket.getOutputStream();
 			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
 			objectOutput.writeInt(0);  // 0 means sending set of events
-			synchronized(lock){
-				objectOutput.writeObject(NP);
-				objectOutput.writeObject(T);
-			}
+			
 			objectOutput.writeInt(nodeId);
 			objectOutput.close();
 			out.close();
@@ -589,11 +461,10 @@ public class Node {
 	 */
 	@SuppressWarnings("unchecked")
 	public void receive(Socket clientSocket){
-		Set<EventRecord> NPk = null;
-		int Tk[][] = null;
+		
 		int k = -1;
 		Appointment cancelAppt = null;
-		EventRecord cancelER = null;
+		
 		//boolean cancellation = false;
 		int cancel = -1;
 		try {
@@ -603,15 +474,14 @@ public class Node {
 			cancel = objectInput.readInt();
 			if (cancel == 0){
 				//cancellation = false;
-				NPk = (HashSet<EventRecord>)objectInput.readObject();
-				Tk = (int[][])objectInput.readObject();
+				
 			}
 			else if (cancel == 1){
 				//cancellation = true;
 				cancelAppt = (Appointment)objectInput.readObject();
 			}
 			else if (cancel == 2){
-				cancelER = (EventRecord)objectInput.readObject();
+				
 			}
 			k = objectInput.readInt();
 			objectInput.close();
@@ -625,117 +495,32 @@ public class Node {
 		
 		if (cancel == 0){
 			// handle the appointments received
-			if (NPk != null){
+			//if (NPk != null){
 				synchronized(lock){
-					// update NE
-					NE.clear();
-					for (EventRecord fR:NPk){
-						if (!hasRec(T, fR, nodeId)){
-							NE.add(fR);
-						}
-					}
 					
-					// update the dictionary and calendar and log
 					// check for appts in currentAppts that need to be deleted
 					HashSet<Appointment> delAppts = new HashSet<Appointment>();
 					for (Appointment appt:currentAppts){
-						EventRecord dR = containsAppointment(NE, appt);
-						if (dR != null && dR.getOperation().equals("delete")){
 							delAppts.add(appt);
 							// update calendar
-							for (Integer id:dR.getAppointment().getParticipants()) {
+							/*for (Integer id:dR.getAppointment().getParticipants()) {
 								for (int j = dR.getAppointment().getStartIndex(); j < dR.getAppointment().getEndIndex(); j++) {
 									this.calendars[id][dR.getAppointment().getDay().ordinal()][j] = 0;
 								}
-							}
+							}*/
 						}
-					}
+					
 					// now actually remove appointments from currentAppts
 					for (Appointment appt:delAppts){
 						currentAppts.remove(appt);
 					}
-					// check for events in NE that need to be inserted into currentAppts
-					for (EventRecord eR:NE){
-						writeToLog(eR); // want to write all events in NE to log
-						if (eR.getOperation().equals("insert")){
-							EventRecord dR = containsAppointment(NE, eR.getAppointment());
-							if (dR == null){ // there's no 'delete()' for this appointment so add to currentAppts
-								// first check to see if the appointment conflicts with my schedule
-								// then go through other nodes calendars and handle appropriately
-								if (eR.getAppointment().getParticipants().contains(this.nodeId)){
-									boolean conflict = false;
-									for (int j = eR.getAppointment().getStartIndex(); j < eR.getAppointment().getEndIndex(); j++) {
-										if (this.calendars[this.nodeId][eR.getAppointment().getDay().ordinal()][j] == 1){
-											conflict = true;
-										}
-									}
-									if (conflict){
-										System.out.println("Trying to schedule conflicting appointment");
-										sendCancellationMsg(eR.getAppointment(), k);
-									}
-									else {
-										currentAppts.add(eR.getAppointment());
-										// update my view of all participants calendars
-										for (Integer id:eR.getAppointment().getParticipants()) {
-											for (int j = eR.getAppointment().getStartIndex(); j < eR.getAppointment().getEndIndex(); j++) {
-												this.calendars[id][eR.getAppointment().getDay().ordinal()][j] = 1;
-											}
-										}
-									}
-								}
-								else {  // this node isn't a participant, shouldn't need to check for conflict 
-									// checking for conflicts is left up to participants of an appointment
-									currentAppts.add(eR.getAppointment());
-									// update my view of all participants calendars
-									for (Integer id:eR.getAppointment().getParticipants()) {
-										for (int j = eR.getAppointment().getStartIndex(); j < eR.getAppointment().getEndIndex(); j++) {
-											this.calendars[id][eR.getAppointment().getDay().ordinal()][j] = 1;
-										}
-									}
-								}
-								
-							}
-						}
-					}
 					
-					// update T
-					for (int i = 0; i < numNodes; i++){
-						T[nodeId][i] = Math.max(T[nodeId][i], Tk[k][i]);
-					}
-					for (int i = 0; i < numNodes; i++){
-						for (int j = 0; j < numNodes; j++){
-							T[i][j] = Math.max(T[i][j], Tk[i][j]);
-						}
-					}
-					
-					// updates to PL
-					HashSet<EventRecord> delPL = new HashSet<EventRecord>();
-					for (EventRecord eR:PL){
-						boolean canDel = true;
-						for (int j = 0; j < numNodes; j++){
-							if (!hasRec(T, eR, j)){
-								canDel = false;
-							}
-						}
-						if (canDel)
-							delPL.add(eR);
-					}
-					for (EventRecord eR:delPL){
-						PL.remove(eR);
-					}
-					
-					for (EventRecord eR:NE){
-						for (int j = 0; j < numNodes; j++){
-							if (!hasRec(T, eR, j)){
-								PL.add(eR);
-							}
-						}
-					}
+		
 					
 					saveNodeState();
 	
 				}// end synchronize
-			}
+			//}
 		}
 		else if (cancel == 1) { // received appointment to be cancelled because of conflict
 			boolean found = false;
@@ -756,7 +541,7 @@ public class Node {
 		}
 		else if (cancel == 2){
 			boolean found = false;
-			synchronized(lock){
+			/*synchronized(lock){
 				for (EventRecord fR:PL){
 					if (fR.getAppointment().getApptID().equals(cancelER.getAppointment().getApptID()) && fR.getOperation().equals("delete"))
 						found = true;
@@ -765,7 +550,7 @@ public class Node {
 					writeToLog(cancelER);
 					PL.add(cancelER);
 				}
-			}
+			}*/
 			saveNodeState();
 		}
 		
@@ -819,19 +604,15 @@ public class Node {
 	}
 	
 	public void sendCancellationMsg(String apptID, final int k){
-		EventRecord eR = null;
-		for (EventRecord fR:PL){
-			if (fR.getAppointment().getApptID().equals(apptID) && fR.getOperation().equals("delete"))
-				eR = fR;
-		}
-		if (eR != null){
+		
+		//if (eR != null){
 			try {
 				Socket socket = new Socket(hostNames[k], port);
 				OutputStream out = socket.getOutputStream();
 				ObjectOutputStream objectOutput = new ObjectOutputStream(out);
 				objectOutput.writeInt(2);  // 2 means sending back delete event record to each notifying node
 				synchronized(lock){
-					objectOutput.writeObject(eR);
+					//objectOutput.writeObject(eR);
 					//objectOutput.writeObject(T);
 				}
 				objectOutput.writeInt(nodeId);
@@ -864,23 +645,9 @@ public class Node {
 			catch (IOException e) {
 				e.printStackTrace();
 			}
-		}
+		//}
 	}
-	
-	/**
-	 *  determine if a given appointment is the same as one in an EventRecord
-	 *  useful when trying to find the insert or delete of a given appointment
-	 * @param set The set to iterate through
-	 * @param appt the appointment to find
-	 * @return returns the appropriate event record if found, otherwise null
-	 */
-	public static EventRecord containsAppointment(Set<EventRecord> set, Appointment appt){
-		for (EventRecord eR:set){
-			if (eR.getAppointment().getApptID().equals(appt.getApptID()) && eR.getOperation().equals("delete"))
-				return eR;
-		}
-		return null;
-	}
+
 
 	/**
 	 * @return cantSched
