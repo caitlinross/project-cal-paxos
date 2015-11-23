@@ -17,6 +17,8 @@ public class Node {
 	private int maxPrepare;
 	private int accNum;
 	private LogEntry accVal;
+	private LogEntry[] responseVals;
+	private int[] responseNums;
 	
 	// variables that need to be concerned with synchronization
 	private Object lock = new Object();
@@ -65,6 +67,11 @@ public class Node {
 			sendFail[i] = false;
 		}
 		this.setCantSched(false);
+		this.responseVals = new LogEntry[this.numNodes];
+		this.responseNums = new int[this.numNodes];
+		for (int i = 0; i < this.responseNums.length; i++){
+			this.responseNums[i] = -1;
+		}
 		
 		// recover node state if this is restarting from crash
 		if (recovery)
@@ -722,8 +729,37 @@ public class Node {
 	 * @param accNum accepted proposal number
 	 * @param accVal accepted value
 	 */
-	public void promise(int accNum, LogEntry accVal){
+	public void promise(int accNum, LogEntry accVal, int senderId){
+		this.responseVals[senderId] = accVal;
+		this.responseNums[senderId] = accNum;
+		int totalRecd = 0;
+		for (int i = 0; i < this.responseNums.length; i++){
+			if (this.responseNums[i] != -1){
+				totalRecd++;
+			}
+		}
+		if (totalRecd > this.numNodes/2){ // has received a majority of responses
+			int maxNum = 0;
+			int index = -1;
+			LogEntry v;
+			boolean allNull = true;
+			for (int i = 0; i < this.responseNums.length; i++){
+				if (this.responseNums[i] != -1){
+					allNull = false;
+				}
+				if (this.responseNums[i] > maxNum){
+					maxNum = this.responseNums[i];
+					index = i;
+				}
+			}
+			if (allNull){
+				
+			}
+			else{
+				v = this.responseVals[index];
 		
+			}
+		}
 	}
 	
 }

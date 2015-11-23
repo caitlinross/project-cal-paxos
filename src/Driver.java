@@ -93,12 +93,12 @@ public class Driver {
 		Runnable udpThread = new Runnable(){
 			public synchronized void run() {
 				System.out.println("Start listening for other nodes, UDP");
-				DatagramSocket socket;
+				final DatagramSocket socket;
 		        try {
 		        	socket = new DatagramSocket(port);
 		            while (true) {
 		            	byte[] buf = new byte[256];  // TODO change size to appropriate size later
-		            	DatagramPacket packet = new DatagramPacket(buf, buf.length);
+		            	final DatagramPacket packet = new DatagramPacket(buf, buf.length);
 		            	socket.receive(packet);
 		            	Runnable runnable = new Runnable() {
 		                    public synchronized void run() {

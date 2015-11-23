@@ -1,3 +1,4 @@
+import java.io.*;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -7,7 +8,7 @@ import java.util.Set;
  * This object stores details for a given log entry.
  * One log entry is a full calendar (As opposed to an individual event
  */
-public class LogEntry {
+public class LogEntry implements Serializable {
 
 	private Set<Appointment> appts;
 	private int logPos;
