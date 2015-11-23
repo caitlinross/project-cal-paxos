@@ -16,6 +16,7 @@ public class Node {
 	private String stateLog;
 	private int maxPrepare;
 	private int accNum;
+	private LogEntry accVal;
 	
 	// variables that need to be concerned with synchronization
 	private Object lock = new Object();
@@ -684,7 +685,7 @@ public class Node {
 	 * 
 	 * @param packet UDP packet received from another node
 	 */
-	public void receivePacket(DatagramPacket packet){
+	public void receivePacket(DatagramPacket packet, DatagramSocket socket){
 		
 	}
 	
@@ -693,10 +694,26 @@ public class Node {
 	 * @param m
 	 * @param logPos
 	 */
-	public void prepare(int m, int logPos){
+	public void prepare(int m, int logPos, DatagramPacket packet, DatagramSocket socket){
+		byte[] buf = new byte[256];
 		if (m > maxPrepare){
 			maxPrepare = m;
-			//TODO send reply with accNum, accVal
+			try{
+			// put accVal and accNum 
+			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+			ObjectOutputStream os = new ObjectOutputStream(outputStream);
+			os.writeObject(MessageType.PROMISE);
+			os.writeInt(this.accNum);
+			os.writeObject(this.accVal);
+			// send reply with accNum, accVal
+			InetAddress address = packet.getAddress();
+            int port = packet.getPort();
+            packet = new DatagramPacket(buf, buf.length, address, port);
+				socket.send(packet);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 	}
 	

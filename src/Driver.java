@@ -103,7 +103,7 @@ public class Driver {
 		            	Runnable runnable = new Runnable() {
 		                    public synchronized void run() {
 		                        // TODO pass packet to node object
-		                    	node.receivePacket(packet);
+		                    	node.receivePacket(packet, socket);
 		                    }
 		                };
 		                new Thread(runnable).start();
