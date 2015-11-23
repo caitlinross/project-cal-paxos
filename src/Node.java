@@ -19,6 +19,7 @@ public class Node {
 	private LogEntry accVal;
 	private LogEntry[] responseVals;
 	private int[] responseNums;
+	private int m;
 	
 	// variables that need to be concerned with synchronization
 	private Object lock = new Object();
@@ -697,32 +698,49 @@ public class Node {
 	}
 	
 	/**
+	 * send data via UDP
+	 * @param sendTo id who to send to
+	 * @param data objects saved into byte array to send
+	 */
+	public void sendPacket(int sendTo, byte[] data){
+		try{
+			DatagramSocket socket = new DatagramSocket();
+			InetAddress address = InetAddress.getByName(this.hostNames[sendTo]);
+			DatagramPacket packet = new DatagramPacket(data, data.length, address, this.port);
+			socket.send(packet);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+	}
+	
+	/**
 	 * received a prepare msg from another node
 	 * @param m
 	 * @param logPos
 	 */
-	public void prepare(int m, int logPos, DatagramPacket packet, DatagramSocket socket){
-		byte[] buf = new byte[256];
+	public void prepare(int m, int logPos, int sender){
 		if (m > maxPrepare){
 			maxPrepare = m;
 			try{
-			// put accVal and accNum 
-			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-			ObjectOutputStream os = new ObjectOutputStream(outputStream);
-			os.writeObject(MessageType.PROMISE);
-			os.writeInt(this.accNum);
-			os.writeObject(this.accVal);
-			// send reply with accNum, accVal
-			InetAddress address = packet.getAddress();
-            int port = packet.getPort();
-            packet = new DatagramPacket(buf, buf.length, address, port);
-				socket.send(packet);
+				// put accVal and accNum 
+				ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+				ObjectOutputStream os = new ObjectOutputStream(outputStream);
+				os.writeObject(MessageType.PROMISE);
+				os.writeInt(this.accNum);
+				os.writeObject(this.accVal);
+				byte[] data = outputStream.toByteArray();
+				// send reply with accNum, accVal
+				sendPacket(sender, data);
+			
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}
 	}
+	
 	
 	/** received promise msg from another node
 	 * 
@@ -753,12 +771,31 @@ public class Node {
 				}
 			}
 			if (allNull){
-				
+				// choose my own value to send
+				//TODO may not be correct
+				v = this.accVal;
 			}
 			else{
 				v = this.responseVals[index];
 		
 			}
+			
+			// send accept message
+			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+			ObjectOutputStream os;
+			try {
+				os = new ObjectOutputStream(outputStream);
+				os.writeObject(MessageType.ACCEPT);
+				os.writeInt(this.m);
+				os.writeObject(v);
+				byte[] data = outputStream.toByteArray();
+				// send reply with accNum, accVal
+				sendPacket(senderId, data);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
 		}
 	}
 	
