@@ -694,7 +694,8 @@ public class Node {
 	 * @param packet UDP packet received from another node
 	 */
 	public void receivePacket(DatagramPacket packet, DatagramSocket socket){
-		
+		// TODO  probably need some sort of queue for handling messages for different log entry
+		// i.e. only work on one log entry at a time
 	}
 	
 	/**
@@ -796,6 +797,29 @@ public class Node {
 				e.printStackTrace();
 			}
 			
+		}
+	}
+	
+	public void accept(int m, LogEntry v, int senderId){
+		if (m >= this.maxPrepare){
+			this.accNum = m;
+			this.accVal = v;
+			
+			// send ack back to sender
+			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+			ObjectOutputStream os;
+			try {
+				os = new ObjectOutputStream(outputStream);
+				os.writeObject(MessageType.ACK);
+				os.writeInt(this.accNum);
+				os.writeObject(this.accVal);
+				byte[] data = outputStream.toByteArray();
+				// send reply with accNum, accVal
+				sendPacket(senderId, data);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 	}
 	
