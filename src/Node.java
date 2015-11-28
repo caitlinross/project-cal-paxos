@@ -9,7 +9,7 @@ import java.io.*;
 
 public class Node {
 	private int port;
-	private String[] hostNames;
+	private ArrayList<String> hostNames;
 	private int nodeId;
 	private int numNodes; 
 	private String logName;
@@ -53,7 +53,10 @@ public class Node {
 		this.nodeId = nodeID;
 		this.numNodes = totalNodes;
 		this.port = port;
-		this.hostNames = hostNames;
+		this.hostNames = new ArrayList<String>();
+		for (int i = 0; i<hostNames.length; i++){
+			this.hostNames.add(hostNames[i]);
+		}
 		this.maxPrepare = 0;
 		this.logPos = 0;
 		
@@ -433,7 +436,7 @@ public class Node {
 		// TODO can use this for leader election stuff, just change what's written to the socket
 		// now send NP
 		try {
-			Socket socket = new Socket(hostNames[k], port);
+			Socket socket = new Socket(hostNames.get(k), port);
 			OutputStream out = socket.getOutputStream();
 			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
 			objectOutput.writeInt(0);  // 0 means sending set of events
@@ -582,7 +585,7 @@ public class Node {
 	public void sendCancellationMsg(Appointment appt, final int k){
 		// TODO can probably just delete this, don't think there's any need for this in paxos
 		try {
-			Socket socket = new Socket(hostNames[k], port);
+			Socket socket = new Socket(hostNames.get(k), port);
 			OutputStream out = socket.getOutputStream();
 			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
 			objectOutput.writeInt(1);  // 1 means sending specific appointment to be canceled
@@ -626,7 +629,7 @@ public class Node {
 		// TODO maybe leader node uses this to tell another node that the appointment it wants to create has a conflict
 		//if (eR != null){
 			try {
-				Socket socket = new Socket(hostNames[k], port);
+				Socket socket = new Socket(hostNames.get(k), port);
 				OutputStream out = socket.getOutputStream();
 				ObjectOutputStream objectOutput = new ObjectOutputStream(out);
 				objectOutput.writeInt(2);  // 2 means sending back delete event record to each notifying node
@@ -705,6 +708,49 @@ public class Node {
 	public void receivePacket(DatagramPacket packet, DatagramSocket socket){
 		// TODO  probably need some sort of queue for handling messages for different log entry
 		// i.e. only work on one log entry at a time, keep track with this.logPos
+		int senderId = -1;
+		if (this.hostNames.contains(packet.getAddress().toString())){
+			senderId = this.hostNames.indexOf(packet.getAddress().toString());
+		}
+
+		try {
+			int byteCount = packet.getLength();
+		    ByteArrayInputStream byteStream = new ByteArrayInputStream(packet.getData());
+		    ObjectInputStream is = new ObjectInputStream(new BufferedInputStream(byteStream));
+		    int tmp = is.readInt();
+		    MessageType msg = MessageType.values()[tmp];
+		    if (msg.equals(MessageType.PREPARE)){
+		    	int m = is.readInt();
+		    	prepare(m, senderId);
+		    }
+		    else if (msg.equals(MessageType.PROMISE)){
+		    	int accNum = is.readInt();
+		    	LogEntry accVal = (LogEntry) is.readObject();
+		    	promise(accNum, accVal, senderId);
+		    }
+		    else if (msg.equals(MessageType.ACCEPT)){
+		    	int m = is.readInt();
+		    	LogEntry v = (LogEntry) is.readObject();
+		    	accept(m, v, senderId);
+		    }
+		    else if (msg.equals(MessageType.ACK)){
+		    	int accNum = is.readInt();
+		    	LogEntry accVal = (LogEntry) is.readObject();
+		    	ack(accNum, accVal, senderId);
+		    }
+		    else if (msg.equals(MessageType.COMMIT)){
+		    	LogEntry v = (LogEntry) is.readObject();
+		    	commit(v);
+		    }
+		    is.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		catch (ClassNotFoundException e){
+			
+		}
+	      
 		
 	}
 	
@@ -716,7 +762,7 @@ public class Node {
 	public void sendPacket(int sendTo, byte[] data){
 		try{
 			DatagramSocket socket = new DatagramSocket();
-			InetAddress address = InetAddress.getByName(this.hostNames[sendTo]);  // TODO might need to change for using on AWS (i.e. just use IP address)
+			InetAddress address = InetAddress.getByName(this.hostNames.get(sendTo));  // TODO might need to change for using on AWS (i.e. just use IP address)
 			DatagramPacket packet = new DatagramPacket(data, data.length, address, this.port);
 			socket.send(packet);
 		} catch (IOException e) {
@@ -730,14 +776,14 @@ public class Node {
 	 * @param m
 	 * @param logPos
 	 */
-	public void prepare(int m, int logPos, int sender){
+	public void prepare(int m, int sender){
 		if (m > maxPrepare){
 			maxPrepare = m;
 			try{
 				// put accVal and accNum 
 				ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 				ObjectOutputStream os = new ObjectOutputStream(outputStream);
-				os.writeObject(MessageType.PROMISE);
+				os.writeInt(MessageType.PROMISE.ordinal());
 				os.writeInt(this.accNum);
 				os.writeObject(this.accVal);
 				byte[] data = outputStream.toByteArray();
@@ -795,7 +841,7 @@ public class Node {
 			ObjectOutputStream os;
 			try {
 				os = new ObjectOutputStream(outputStream);
-				os.writeObject(MessageType.ACCEPT);
+				os.writeInt(MessageType.ACCEPT.ordinal());
 				os.writeInt(this.m);
 				os.writeObject(v);
 				byte[] data = outputStream.toByteArray();
@@ -819,7 +865,7 @@ public class Node {
 			ObjectOutputStream os;
 			try {
 				os = new ObjectOutputStream(outputStream);
-				os.writeObject(MessageType.ACK);
+				os.writeInt(MessageType.ACK.ordinal());
 				os.writeInt(this.accNum);
 				os.writeObject(this.accVal);
 				byte[] data = outputStream.toByteArray();
@@ -871,7 +917,7 @@ public class Node {
 			ObjectOutputStream os;
 			try {
 				os = new ObjectOutputStream(outputStream);
-				os.writeObject(MessageType.COMMIT);
+				os.writeInt(MessageType.COMMIT.ordinal());
 				os.writeObject(v);
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
