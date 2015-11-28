@@ -22,37 +22,27 @@ public class Node {
 	private LogEntry[] ackRespVals;
 	private int[] ackRespNums;
 	private int m;
+	private ArrayList<LogEntry> log;
 	
 	// variables that need to be concerned with synchronization
 	private Object lock = new Object();
-	private int calendars[][][];
+	private int calendars[][][]; //stores a 0 or 1 for each time period to represent appointment or free
 	
 	private Set<Appointment> currentAppts;
 
 	private boolean sendFail[];
-	private boolean cantSched;
-	private Set<Appointment> badAppts;
+	private boolean cantSched; //flag for determining if there has been some conflicting appointments
+	private Set<Appointment> badAppts; //conflicting appointments that need to be reported to the creating node
 	
 	/**
 	 * @param totalNodes number of nodes being used
 	 * @param port port to use for connections
 	 * @param hostNames hostnames for all nodes
 	 * @param nodeID this nodes id number
-	 * @param recovery is this a recovery startup?
-	 * @param logName the file name for the log
-	 * @param stateLog the file name for saving the node state
-	 * @param calendars stores a 0 or 1 for each time period to represent appointment or free
-	 * @param PL from W&B alg
-	 * @param NE from W&B alg
-	 * @param NP from W&B alg
-	 * @param currentAppts appointments that are scheduled; only good appointments (At least as far as this node knows so far)
-	 * @param badAppts conflicting appointments that need to be reported to the creating node
-	 * @param T matrix from W&B alg
-	 * @param c clock for this node
-	 * @param sendFail for keeping track of whether we were able to send to nodes or not (if they crashed)
-	 * @param cantSched flag for determing if there has been some conflicting appointments
+	 * @param recovery is this a recovery startup?	
 	 */
 	public Node(int totalNodes, int port, String[] hostNames, int nodeID, boolean recovery) {
+		this.log = new ArrayList<LogEntry>();
 		this.logName = "appointments.log";
 		this.stateLog = "nodestate.txt";
 		this.nodeId = nodeID;
@@ -880,6 +870,16 @@ public class Node {
 			}
 			
 		}
+	}
+	
+	/**
+	 * simply record v in the log
+	 * @param v
+	 */
+	public void commit(LogEntry v){
+		this.log.add(v.getLogPos(), v);
+		
+		// TODO write to storage in case of crash
 	}
 	
 }
