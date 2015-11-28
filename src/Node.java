@@ -14,22 +14,27 @@ public class Node {
 	private int numNodes; 
 	private String logName;
 	private String stateLog;
+	
+	// Paxos vars
 	private int maxPrepare;
 	private int accNum;
 	private LogEntry accVal;
+	private int m;
+	private ArrayList<LogEntry> log;
+	private int logPos;
+	
+	// keeping track of promise and ack responses
 	private LogEntry[] responseVals;
 	private int[] responseNums;
 	private LogEntry[] ackRespVals;
 	private int[] ackRespNums;
-	private int m;
-	private ArrayList<LogEntry> log;
-	
+
 	// variables that need to be concerned with synchronization
 	private Object lock = new Object();
 	private int calendars[][][]; //stores a 0 or 1 for each time period to represent appointment or free
-	
 	private Set<Appointment> currentAppts;
 
+	// TODO delete if unnecessary
 	private boolean sendFail[];
 	private boolean cantSched; //flag for determining if there has been some conflicting appointments
 	private Set<Appointment> badAppts; //conflicting appointments that need to be reported to the creating node
@@ -50,16 +55,11 @@ public class Node {
 		this.port = port;
 		this.hostNames = hostNames;
 		this.maxPrepare = 0;
-		this.calendars = new int[totalNodes][7][48];
+		this.logPos = 0;
 		
-		this.currentAppts = new HashSet<Appointment>();  // dictionary
-		this.badAppts = new HashSet<Appointment>();
-
-		this.sendFail = new boolean[this.numNodes];
-		for (int i = 0; i < sendFail.length; i++){
-			sendFail[i] = false;
-		}
-		this.setCantSched(false);
+		this.calendars = new int[totalNodes][7][48];
+		this.currentAppts = new HashSet<Appointment>();  // keep appointments from most recent log entry
+		
 		this.responseVals = new LogEntry[this.numNodes];
 		this.responseNums = new int[this.numNodes];
 		for (int i = 0; i < this.responseNums.length; i++){
@@ -70,6 +70,14 @@ public class Node {
 		for (int i = 0; i < this.ackRespNums.length; i++){
 			this.ackRespNums[i] = -1;
 		}
+		
+		// TODO delete if these turn out to be unnecessary
+		this.badAppts = new HashSet<Appointment>();
+		this.sendFail = new boolean[this.numNodes];
+		for (int i = 0; i < sendFail.length; i++){
+			sendFail[i] = false;
+		}
+		this.setCantSched(false);
 		
 		// recover node state if this is restarting from crash
 		if (recovery)
@@ -243,6 +251,7 @@ public class Node {
 	 * @param eR the event record to write to log
 	 */
 	public void writeToLog(){
+		// TODO probably delete this and only use saveNodeState() for saving necessary log info
 		/*try{
 			FileWriter fw = new FileWriter(this.logName, true);
 			BufferedWriter bw = new BufferedWriter(fw);
@@ -277,6 +286,7 @@ public class Node {
 	 *  save state of system for recovering from crash
 	 */
 	public void saveNodeState(){
+		// TODO update this for saving necessary information in case of node crash
 		try{
 			FileWriter fw = new FileWriter("nodestate.txt", false);  // overwrite each time
 			BufferedWriter bw = new BufferedWriter(fw);
@@ -323,6 +333,7 @@ public class Node {
 	 *  recover from node failure
 	 */
 	public void restoreNodeState(){
+		// TODO update once saveNodeState() is correct for this implementation
 		BufferedReader reader = null;
 		try {
 			reader = new BufferedReader(new FileReader(this.stateLog));
@@ -419,8 +430,7 @@ public class Node {
 	 * @param k node to send to
 	 */
 	public void send(final int k){
-		
-		
+		// TODO can use this for leader election stuff, just change what's written to the socket
 		// now send NP
 		try {
 			Socket socket = new Socket(hostNames[k], port);
@@ -469,7 +479,7 @@ public class Node {
 	 */
 	@SuppressWarnings("unchecked")
 	public void receive(Socket clientSocket){
-		
+		// TODO probably use this for leader election, has a lot of cruft from last project that needs deleted
 		int k = -1;
 		Appointment cancelAppt = null;
 		
@@ -570,6 +580,7 @@ public class Node {
 	 * @param k node to notify (should be the node that originally created appointment)
 	 */
 	public void sendCancellationMsg(Appointment appt, final int k){
+		// TODO can probably just delete this, don't think there's any need for this in paxos
 		try {
 			Socket socket = new Socket(hostNames[k], port);
 			OutputStream out = socket.getOutputStream();
@@ -612,7 +623,7 @@ public class Node {
 	}
 	
 	public void sendCancellationMsg(String apptID, final int k){
-		
+		// TODO maybe leader node uses this to tell another node that the appointment it wants to create has a conflict
 		//if (eR != null){
 			try {
 				Socket socket = new Socket(hostNames[k], port);
@@ -689,25 +700,26 @@ public class Node {
 	 * Determine message type and forward to appropriate function
 	 * 
 	 * @param packet UDP packet received from another node
+	 * @param socket the socket the packet was received from
 	 */
 	public void receivePacket(DatagramPacket packet, DatagramSocket socket){
 		// TODO  probably need some sort of queue for handling messages for different log entry
-		// i.e. only work on one log entry at a time
+		// i.e. only work on one log entry at a time, keep track with this.logPos
+		
 	}
 	
 	/**
 	 * send data via UDP
-	 * @param sendTo id who to send to
+	 * @param sendTo id of node to send to
 	 * @param data objects saved into byte array to send
 	 */
 	public void sendPacket(int sendTo, byte[] data){
 		try{
 			DatagramSocket socket = new DatagramSocket();
-			InetAddress address = InetAddress.getByName(this.hostNames[sendTo]);
+			InetAddress address = InetAddress.getByName(this.hostNames[sendTo]);  // TODO might need to change for using on AWS (i.e. just use IP address)
 			DatagramPacket packet = new DatagramPacket(data, data.length, address, this.port);
 			socket.send(packet);
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
