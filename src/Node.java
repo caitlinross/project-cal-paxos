@@ -183,23 +183,6 @@ public class Node {
 	}
 	
 	/**
-	 *  deletes a conflicting appointment from self and sends messages to any other necessary nodes
-	 * @param appt appointment to be deleted
-	 * @param notifyingNode the node that notified about the conflict
-	 */
-	public void deleteOldAppointment(Appointment appt, int notifyingNode) {
-	
-		for (Integer node:appt.getParticipants()){
-			if (node != notifyingNode && node != this.nodeId){
-				sendCancellationMsg(appt, node);
-			}
-			else if (node == notifyingNode){
-				sendCancellationMsg(appt.getApptID(), notifyingNode);
-			}
-		}
-	}
-	
-	/**
 	 * print out the calendar to the terminal
 	 */
 	public void printCalendar() {
@@ -420,8 +403,7 @@ public class Node {
 	 * @param k node to send to
 	 */
 	public void send(final int k){
-		// TODO can use this for leader election stuff, just change what's written to the socket
-		// now send NP
+		// TODO can use this for leader election stuff, just change what's written to the socket (this already uses TCP)
 		try {
 			Socket socket = new Socket(hostNames.get(k), port);
 			OutputStream out = socket.getOutputStream();
@@ -446,10 +428,8 @@ public class Node {
 	 */
 	@SuppressWarnings("unchecked")
 	public void receive(Socket clientSocket){
-		// TODO probably use this for leader election, has a lot of cruft from last project that needs deleted
+		// TODO probably can take this to use for a receive for leader election (this is already using TCP), just delete unneeded stuff
 		int k = -1;
-		Appointment cancelAppt = null;
-		
 		//boolean cancellation = false;
 		int cancel = -1;
 		try {
@@ -457,108 +437,50 @@ public class Node {
 			InputStream in = clientSocket.getInputStream();
 			ObjectInputStream objectInput = new ObjectInputStream(in);
 			cancel = objectInput.readInt();
-			if (cancel == 0){
-				//cancellation = false;
-				
-			}
-			else if (cancel == 1){
-				//cancellation = true;
-				cancelAppt = (Appointment)objectInput.readObject();
-			}
-			else if (cancel == 2){
-				
-			}
 			k = objectInput.readInt();
 			objectInput.close();
 			in.close();
 		} 
 		catch (IOException e) {
 			e.printStackTrace();
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
 		} 
 		
-		if (cancel == 0){
-			// handle the appointments received
-			//if (NPk != null){
-				synchronized(lock){
-					
-					// check for appts in currentAppts that need to be deleted
-					HashSet<Appointment> delAppts = new HashSet<Appointment>();
-					for (Appointment appt:currentAppts){
-							delAppts.add(appt);
-							// update calendar
-							/*for (Integer id:dR.getAppointment().getParticipants()) {
-								for (int j = dR.getAppointment().getStartIndex(); j < dR.getAppointment().getEndIndex(); j++) {
-									this.calendars[id][dR.getAppointment().getDay().ordinal()][j] = 0;
-								}
-							}*/
+		// handle the appointments received
+		synchronized(lock){
+			
+			// check for appts in currentAppts that need to be deleted
+			HashSet<Appointment> delAppts = new HashSet<Appointment>();
+			for (Appointment appt:currentAppts){
+					delAppts.add(appt);
+					// update calendar
+					/*for (Integer id:dR.getAppointment().getParticipants()) {
+						for (int j = dR.getAppointment().getStartIndex(); j < dR.getAppointment().getEndIndex(); j++) {
+							this.calendars[id][dR.getAppointment().getDay().ordinal()][j] = 0;
 						}
-					
-					// now actually remove appointments from currentAppts
-					for (Appointment appt:delAppts){
-						currentAppts.remove(appt);
-					}
-					
-		
-					
-					saveNodeState();
-	
-				}// end synchronize
-			//}
-		}
-		
-		else if (cancel == 2){
-			boolean found = false;
-			/*synchronized(lock){
-				for (EventRecord fR:PL){
-					if (fR.getAppointment().getApptID().equals(cancelER.getAppointment().getApptID()) && fR.getOperation().equals("delete"))
-						found = true;
+					}*/
 				}
-				if (!found){
-					writeToLog(cancelER);
-					PL.add(cancelER);
-				}
-			}*/
-			saveNodeState();
-		}
-		
-	}
-	
-	/**
-	 *  send a message to node k that this appointment conflicts with previously scheduled node
-	 * @param appt appointment to cancel
-	 * @param k node to notify (should be the node that originally created appointment)
-	 */
-	public void sendCancellationMsg(Appointment appt, final int k){
-		// TODO can probably just delete this, don't think there's any need for this in paxos
-		try {
-			Socket socket = new Socket(hostNames.get(k), port);
-			OutputStream out = socket.getOutputStream();
-			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
-			objectOutput.writeInt(1);  // 1 means sending specific appointment to be canceled
-			synchronized(lock){
-				objectOutput.writeObject(appt);
-				//objectOutput.writeObject(T);
+			
+			// now actually remove appointments from currentAppts
+			for (Appointment appt:delAppts){
+				currentAppts.remove(appt);
 			}
-			objectOutput.writeInt(nodeId);
-			objectOutput.close();
-			out.close();
-			socket.close();
-		} 
-		catch (IOException e) {
-			e.printStackTrace();
-		}
+			
+			saveNodeState();
+
+		}// end synchronize
+		
+		
+		
 	}
+	
 	
 	public void sendCancellationMsg(String apptID, final int k){
-		// TODO maybe leader node uses this to tell another node that the appointment it wants to create has a conflict
+		// TODO maybe leader node uses something like this to tell another node that the appointment it wants to create has a conflict
 		//if (eR != null){
 			try {
 				Socket socket = new Socket(hostNames.get(k), port);
 				OutputStream out = socket.getOutputStream();
 				ObjectOutputStream objectOutput = new ObjectOutputStream(out);
-				objectOutput.writeInt(2);  // 2 means sending back delete event record to each notifying node
 				synchronized(lock){
 					//objectOutput.writeObject(eR);
 					//objectOutput.writeObject(T);
