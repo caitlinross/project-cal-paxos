@@ -34,11 +34,6 @@ public class Node {
 	private int calendars[][][]; //stores a 0 or 1 for each time period to represent appointment or free
 	private Set<Appointment> currentAppts;
 
-	// TODO delete if unnecessary
-	private boolean sendFail[];
-	private boolean cantSched; //flag for determining if there has been some conflicting appointments
-	private Set<Appointment> badAppts; //conflicting appointments that need to be reported to the creating node
-	
 	/**
 	 * @param totalNodes number of nodes being used
 	 * @param port port to use for connections
@@ -73,14 +68,6 @@ public class Node {
 		for (int i = 0; i < this.ackRespNums.length; i++){
 			this.ackRespNums[i] = -1;
 		}
-		
-		// TODO delete if these turn out to be unnecessary
-		this.badAppts = new HashSet<Appointment>();
-		this.sendFail = new boolean[this.numNodes];
-		for (int i = 0; i < sendFail.length; i++){
-			sendFail[i] = false;
-		}
-		this.setCantSched(false);
 		
 		// recover node state if this is restarting from crash
 		if (recovery)
@@ -445,30 +432,7 @@ public class Node {
 			objectOutput.close();
 			out.close();
 			socket.close();
-			sendFail[k] = false;
 		} 
-		catch (ConnectException | UnknownHostException ce){
-			// send to process k failed
-			// create thread to keep trying
-			if (!sendFail[k]){  // only start if this hasn't already started
-				sendFail[k] = true;
-			
-				// start a thread that periodically checks for k to recover and send again
-				Runnable runnable = new Runnable() {
-                    public synchronized void run() {
-                    	while (sendFail[k]){
-	                        try {
-								Thread.sleep(6000);  
-								send(k);
-							} catch (InterruptedException e) {
-								e.printStackTrace();
-							}
-                    	}
-                    }
-                };
-                new Thread(runnable).start();
-			}
-		}
 		catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -543,23 +507,7 @@ public class Node {
 				}// end synchronize
 			//}
 		}
-		else if (cancel == 1) { // received appointment to be cancelled because of conflict
-			boolean found = false;
-			synchronized(lock){
-				// check that appointment isn't already in badAppts
-				for (Appointment a:badAppts){
-					if (a.getApptID().equals(cancelAppt.getApptID()))
-						found = true;
-				}
-				if (!found){
-					this.setCantSched(true);
-					if (cancelAppt != null)
-						badAppts.add(cancelAppt);
-				}
-			}
-			if (!found && cancelAppt != null)
-				deleteOldAppointment(cancelAppt, k);
-		}
+		
 		else if (cancel == 2){
 			boolean found = false;
 			/*synchronized(lock){
@@ -597,29 +545,7 @@ public class Node {
 			objectOutput.close();
 			out.close();
 			socket.close();
-			sendFail[k] = false;
 		} 
-		catch (ConnectException | UnknownHostException ce){
-			// send to process k failed
-			if (!sendFail[k]){  // only start if this hasn't already started
-				sendFail[k] = true;
-			
-				// start a thread that periodically checks for k to recover and send again
-				Runnable runnable = new Runnable() {
-                    public synchronized void run() {
-                    	while (sendFail[k]){
-	                        try {
-								Thread.sleep(6000); 
-								send(k);
-							} catch (InterruptedException e) {
-								e.printStackTrace();
-							}
-                    	}
-                    }
-                };
-                new Thread(runnable).start();
-			}
-		}
 		catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -641,64 +567,13 @@ public class Node {
 				objectOutput.close();
 				out.close();
 				socket.close();
-				sendFail[k] = false;
 			} 
-			catch (ConnectException | UnknownHostException ce){
-				// send to process k failed
-				if (!sendFail[k]){  // only start if this hasn't already started
-					sendFail[k] = true;
-				
-					// start a thread that periodically checks for k to recover and send again
-					Runnable runnable = new Runnable() {
-	                    public synchronized void run() {
-	                    	while (sendFail[k]){
-		                        try {
-									Thread.sleep(6000); 
-									send(k);
-								} catch (InterruptedException e) {
-									e.printStackTrace();
-								}
-	                    	}
-	                    }
-	                };
-	                new Thread(runnable).start();
-				}
-			}
 			catch (IOException e) {
 				e.printStackTrace();
 			}
 		//}
 	}
-
-
-	/**
-	 * @return cantSched
-	 */
-	public boolean isCantSched() {
-		return cantSched;
-	}
-
-	/**
-	 * @param cantSched the cantSched to set
-	 */
-	public void setCantSched(boolean cantSched) {
-		this.cantSched = cantSched;
-	}
 	
-	/**
-	 * @return badAppts
-	 */
-	public Set<Appointment> getBadAppts(){
-		return badAppts;
-	}
-	
-	/**
-	 * resets badAppts
-	 */
-	public void resetBadAppts(){
-		badAppts.clear();
-	}
-
 	/**
 	 * Determine message type and forward to appropriate function
 	 * 
