@@ -119,6 +119,7 @@ public class Driver {
 		};
 		new Thread(udpThread).start();
         
+		// TODO perhaps add a "view log" that outputs all log entries the node knows about, to make it easier while demoing to Stacy
 		// loop to ask about adding, deleting, viewing appointments
 		while(true){
 			@SuppressWarnings("resource")
@@ -187,8 +188,9 @@ public class Driver {
 				System.out.println("Action not recognized, please enter 'add', 'delete', or 'print'");
 			}
 			
+			// TODO we might want something similar to this for an appointment that the leader determines can't be scheduled
 			// before asking for next decision, report any appointments that weren't able to be scheduled
-			if (node.isCantSched()){
+			/*if (node.isCantSched()){
 				System.out.println("\n-------- WARNING --------");
 				for (Appointment a:node.getBadAppts()){
 					System.out.println("Can't schedule appointment ID: " + a.getApptID());
@@ -198,7 +200,7 @@ public class Driver {
 				}
 				node.resetBadAppts();
 				node.setCantSched(false);
-			}
+			}*/
 		}
 	}
 	
