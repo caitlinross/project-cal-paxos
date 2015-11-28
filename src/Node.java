@@ -89,7 +89,7 @@ public class Node {
 		return calendars;
 	}
 	
-	/**
+	/** TODO needs to send info to distinguished proposer
 	 * 
 	 * @param nodes participants in the new appointment
 	 * @param name name of appointment
@@ -145,7 +145,7 @@ public class Node {
 		
 	}
 	
-	/**
+	/** TODO needs to be updated for Paxos
 	 *  deletes appointment based on given appointment ID
 	 * @param apptID id for the appointment to be deleted
 	 */
@@ -306,7 +306,7 @@ public class Node {
 	 *  recover from node failure
 	 */
 	public void restoreNodeState(){
-		// TODO update once saveNodeState() is correct for this implementation
+		// TODO update once saveNodeState() is correct for Paxos implementation
 		BufferedReader reader = null;
 		try {
 			reader = new BufferedReader(new FileReader(this.stateLog));
@@ -426,7 +426,6 @@ public class Node {
 	 *  receives <NP, T> from node k
 	 * @param clientSocket socket connection to receiving node
 	 */
-	@SuppressWarnings("unchecked")
 	public void receive(Socket clientSocket){
 		// TODO probably can take this to use for a receive for leader election (this is already using TCP), just delete unneeded stuff
 		int k = -1;
@@ -476,6 +475,7 @@ public class Node {
 	
 	public void sendCancellationMsg(String apptID, final int k){
 		// TODO maybe leader node uses something like this to tell another node that the appointment it wants to create has a conflict
+		// or should that be done by a UDP packet
 		//if (eR != null){
 			try {
 				Socket socket = new Socket(hostNames.get(k), port);
@@ -496,6 +496,7 @@ public class Node {
 		//}
 	}
 	
+	/*****  PAXOS specific functions below here *****/
 	/**
 	 * Determine message type and forward to appropriate function
 	 * 
@@ -511,8 +512,7 @@ public class Node {
 		}
 
 		try {
-			int byteCount = packet.getLength();
-		    ByteArrayInputStream byteStream = new ByteArrayInputStream(packet.getData());
+			ByteArrayInputStream byteStream = new ByteArrayInputStream(packet.getData());
 		    ObjectInputStream is = new ObjectInputStream(new BufferedInputStream(byteStream));
 		    int tmp = is.readInt();
 		    MessageType msg = MessageType.values()[tmp];
@@ -562,6 +562,7 @@ public class Node {
 			InetAddress address = InetAddress.getByName(this.hostNames.get(sendTo));  // TODO might need to change for using on AWS (i.e. just use IP address)
 			DatagramPacket packet = new DatagramPacket(data, data.length, address, this.port);
 			socket.send(packet);
+			socket.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
