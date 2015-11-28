@@ -19,6 +19,8 @@ public class Node {
 	private LogEntry accVal;
 	private LogEntry[] responseVals;
 	private int[] responseNums;
+	private LogEntry[] ackRespVals;
+	private int[] ackRespNums;
 	private int m;
 	
 	// variables that need to be concerned with synchronization
@@ -72,6 +74,11 @@ public class Node {
 		this.responseNums = new int[this.numNodes];
 		for (int i = 0; i < this.responseNums.length; i++){
 			this.responseNums[i] = -1;
+		}
+		this.ackRespVals = new LogEntry[this.numNodes];
+		this.ackRespNums = new int[this.numNodes];
+		for (int i = 0; i < this.ackRespNums.length; i++){
+			this.ackRespNums[i] = -1;
 		}
 		
 		// recover node state if this is restarting from crash
@@ -820,6 +827,58 @@ public class Node {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
+		}
+	}
+	
+	public void ack(int accNum, LogEntry accVal, int senderId){
+		this.ackRespVals[senderId] = accVal;
+		this.ackRespNums[senderId] = accNum;
+		// check for responses received
+		int totalRecd = 0;
+		for (int i = 0; i < this.ackRespNums.length; i++){
+			if (this.ackRespNums[i] != -1){
+				totalRecd++;
+			}
+		}
+		if (totalRecd > this.numNodes/2){ // has received a majority of responses
+			int maxNum = 0;
+			int index = -1;
+			LogEntry v;
+			boolean allNull = true;
+			for (int i = 0; i < this.ackRespNums.length; i++){
+				if (this.ackRespNums[i] != -1){
+					allNull = false;
+				}
+				if (this.ackRespNums[i] > maxNum){
+					maxNum = this.ackRespNums[i];
+					index = i;
+				}
+			}
+			if (allNull){
+				// choose my own value to send
+				//TODO may not be correct
+				v = this.accVal;
+			}
+			else{
+				v = this.ackRespVals[index];
+		
+			}
+			
+			// send commit message
+			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+			ObjectOutputStream os;
+			try {
+				os = new ObjectOutputStream(outputStream);
+				os.writeObject(MessageType.COMMIT);
+				os.writeObject(v);
+				byte[] data = outputStream.toByteArray();
+				// send reply with accNum, accVal
+				sendPacket(senderId, data);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
 		}
 	}
 	
