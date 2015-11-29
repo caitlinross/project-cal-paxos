@@ -156,7 +156,7 @@ public class Node {
 			send(proposerID);
 			//waits for ack or cancellation message
 			//if none received, run leader election
-			bullyElection(nodeID);
+			bullyElection(nodeId);
 		}
 		else {
 			//run paxos
@@ -198,6 +198,11 @@ public class Node {
 				if (proposerID != nodeId ) {
 					send(proposerID);
 					//waits for response from proposer
+					/* Caitlin: So the driver is set up to listen for both TCP and UDP messages.  You probably shouldn't be calling
+					 * receive() here.  The driver will get any message and forward it to the correct receive function 
+					 * (either receive() for TCP msgs or receivePacket() for UDP msgs).  You should change the receive() function
+					 * to do what you want to do here.
+					*/
 					receive(proposerID);
 					
 					//TODO: set up how to check is leader is down--
@@ -222,6 +227,14 @@ public class Node {
 		for (int i=0; i++; i < numNodes) {
 			if (i!=nodeID){
 				sendPacket(i, data)
+				/*
+				 * Caitlin: Actually you shouldn't be using sendPacket() for the election.  That is using UDP to send a message, but 
+				 * you should be using TCP for election.  You can use send() here though.  send() is just old code from the prev project
+				 * you can do whatever you want to with it for leader election.  Also, using the TCP, you can use the try catch blocks
+				 * to handle whether the node is down. That code might not still be here, but it's definitely in the old project code.
+				 * Essentially you just catch the errors that are thrown when a node is down.  I can't remember what they are off the 
+				 * top of my head, but you should be able to find it in the last project code.
+				 */
 				//TODO: finish function, I think sendPAcket is the way to go, I just need to bettew understand all the tcp stuff
 				//plan: send election message as the data parameter
 				//then wait some amount for time for messages back from all others, store ids and pick highest as leader
@@ -453,6 +466,10 @@ public class Node {
 	 */
 	public void send(final int k){
 		// TODO can use this for leader election stuff, just change what's written to the socket (this already uses TCP)
+		/*
+		 * Caitlin:  This is the function that you can change to use for send() in leader election.  I think you really only
+		 * need to change what you write to objectOutput
+		 */
 		try {
 			Socket socket = new Socket(hostNames.get(k), port);
 			OutputStream out = socket.getOutputStream();
@@ -476,6 +493,11 @@ public class Node {
 	 * @param clientSocket socket connection to receiving node
 	 */
 	public void receive(Socket clientSocket){
+		/*
+		 * Caitlin: So when the driver gets a TCP packet, it's set to call this function, which passes the socket connection.
+		 * You just need to pull out the objects that you wrote in during the send() function.  Again, this is all just old code; feel
+		 * free to change as needed.
+		 */
 		// TODO probably can take this to use for a receive for leader election (this is already using TCP), just delete unneeded stuff
 		int k = -1;
 		//boolean cancellation = false;
