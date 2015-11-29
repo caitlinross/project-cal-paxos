@@ -15,13 +15,43 @@ public class LogEntry implements Serializable {
 
 	private Set<Appointment> appts;
 	private int logPos;
+	private int calendar[][][];
 	/**
 	 * 
 	 */
 	public LogEntry(int logPos) {
 		// TODO Auto-generated constructor stub
 		this.appts = new HashSet<Appointment>();
+		this.calendar = new int[5][7][48];
 		this.setLogPos(logPos);
+	}
+	
+	/**
+	 * @return the appts list
+	 */
+	public Set<Appointment> getAppts() {
+		return appts;
+	}
+	
+	/**
+	 * @param appts the appts to set
+	 */
+	public void setAppts(Set<Appointment> appts) {
+		this.appts = appts;
+	}
+	
+	/**
+	 * @return the calendar
+	 */
+	public int[][][] getCalendar() {
+		return calendar;
+	}
+	
+	/**
+	 * @param calendar the calendar to set
+	 */
+	public void setCalendar(int[][][] calendar) {
+		this.calendar = calendar;
 	}
 	/**
 	 * @return the logPos
@@ -35,5 +65,7 @@ public class LogEntry implements Serializable {
 	public void setLogPos(int logPos) {
 		this.logPos = logPos;
 	}
+	
+	
 
 }

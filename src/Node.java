@@ -16,6 +16,7 @@ public class Node {
 	private String stateLog;
 	
 	// Paxos vars
+	private int proposerID;
 	private int maxPrepare;
 	private int accNum;
 	private LogEntry accVal;
@@ -54,6 +55,12 @@ public class Node {
 		}
 		this.maxPrepare = 0;
 		this.logPos = 0;
+		
+		//default: all nodes running, proposer is highest id
+		//TODO: should we save who the proposer is when we crash? or 
+		//do we automatically assume 4 is the proposer for each 
+		//recovered process and if not do an election? 
+		this.proposerID = this.numNodes-1;
 		
 		this.calendars = new int[totalNodes][7][48];
 		this.currentAppts = new HashSet<Appointment>();  // keep appointments from most recent log entry
@@ -104,6 +111,17 @@ public class Node {
 		int startIndex = Appointment.convertTime(start, sAMPM);
 		int endIndex = Appointment.convertTime(end, eAMPM);
 		
+		/*get calendar value and currentAppt list from last logEntry in log, 
+		*if log is empty, calendar is all zeros  and apptList is empty by default
+		*don't need to clear these values if new calendar isn't accepted by Paxos
+		*since it will be overwritten each time anyway, only successfull versions 
+		*get saved to new logEntry
+		*/
+		if (log.size() > 0) {
+			calendars = log.get(log.size()-1).getCalendar();
+			currentAppts = log.get(log.size()-1).getAppts();
+		}
+		
 		// check calendar
 		boolean timeAvail = true;
 		int time = startIndex;
@@ -133,16 +151,18 @@ public class Node {
 		
 		}
 		
-		// appointment involves other nodes besides itself; need to send messages
-		if (nodes.size() > 1 && newAppt != null){
-			for (Integer node:nodes){
-				if (node != this.nodeId){
-					System.out.println("Send new appt to node " + node);
-					send(node);
-				}
-			}
+		// send message to distinguished proposer, unless self is proposer
+		if (proposerID != nodeId ) {
+			send(proposerID);
+			//waits for ack or cancellation message
+			//if none received, run leader election
+			bullyElection(nodeID);
+		}
+		else {
+			//run paxos
 		}
 		
+
 	}
 	
 	/** TODO needs to be updated for Paxos
@@ -151,6 +171,11 @@ public class Node {
 	 */
 	public void deleteOldAppointment(String apptID) {
 		Appointment delAppt = null;
+		//get calendar and appt list from latest log entry
+		if (log.size() > 0) {
+			calendars = log.get(log.size()-1).getCalendar();
+			currentAppts = log.get(log.size()-1).getAppts();
+		}
 		synchronized(lock) {
 			for (Appointment appt:this.currentAppts){
 				//find corresponding appointment
@@ -169,17 +194,41 @@ public class Node {
 						this.calendars[id][delAppt.getDay().ordinal()][j] = 0;
 					}
 				}
-				//if appt involves other nodes, send msgs
-				if (delAppt.getParticipants().size() > 1) {
-					for (Integer node:delAppt.getParticipants()) {
-						if (node != this.nodeId){
-							System.out.println("Send appt deletion to node " + node);
-							send(node);
-						}
-					}
+				// send message to distinguished proposer, unless self is proposer
+				if (proposerID != nodeId ) {
+					send(proposerID);
+					//waits for response from proposer
+					receive(proposerID);
+					
+					//TODO: set up how to check is leader is down--
+					//current idea: just have it wait a small time amount, resend msg and if fails again, run election
+					//waits for ack or cancellation message
+					//if none received, run leader election
+					
+					//TODO: bullyElection(nodeID); -- will have to wait until the airport tomorrow
 				}
+				else {
+					//run paxos
+				}
+
 			}
 		}
+	}
+	
+	/**
+	 * elects new leader 
+	 */
+	public void bullyElection(int id) {
+		for (int i=0; i++; i < numNodes) {
+			if (i!=nodeID){
+				sendPacket(i, data)
+				//TODO: finish function, I think sendPAcket is the way to go, I just need to bettew understand all the tcp stuff
+				//plan: send election message as the data parameter
+				//then wait some amount for time for messages back from all others, store ids and pick highest as leader
+				//sendPacket() again to each, sending id of leader to each
+			}
+		}
+		
 	}
 	
 	/**
