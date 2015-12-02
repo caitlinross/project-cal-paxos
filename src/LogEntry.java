@@ -53,5 +53,9 @@ public class LogEntry implements Serializable {
 	public void addAppt(Appointment appt){
 		this.appts.add(appt);
 	}
+	
+	public Set<Appointment> getAppts(){
+		return appts;
+	}
 
 }

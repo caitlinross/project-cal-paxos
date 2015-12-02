@@ -98,6 +98,36 @@ public class Node {
 		return calendars;
 	}
 	
+	/**
+	 * update calendars and currentAppts based on given log entry
+	 * @param e LogEntry to use for updates
+	 */
+	public void updateCalendars(LogEntry e){
+		// clear out currentAppts and calendars
+		currentAppts.clear();
+		for (int i=0; i < calendars.length; i++){
+			for (int j=0; j < calendars[i].length; j++){
+				for (int k=0; k<calendars[i][j].length; k++){
+					calendars[i][j][k] = 0;
+				}
+			}
+		}
+
+		// update based on given log entry
+		for (Appointment a:e.getAppts()){
+			currentAppts.add(a);
+			int time = a.getStartIndex();
+			int endIndex = a.getEndIndex();
+			while(time < endIndex){
+				for(Integer node:a.getParticipants()){
+					this.calendars[node][a.getDay().ordinal()][time] = 1;
+				}
+			}
+		}
+		
+	}
+
+	
 	/** TODO needs to send info to distinguished proposer
 	 * 
 	 * @param nodes participants in the new appointment
@@ -164,9 +194,10 @@ public class Node {
 				byte[] data = outputStream.toByteArray();
 				// send promise message to all other nodes
 				for (int i = 0; i < this.numNodes; i++){
-					System.out.println("Sending PREPARE msg to node " + i);
-					if (this.nodeId != i)
+					if (this.nodeId != i) {
+						System.out.println("Sending PREPARE msg to node " + i);
 						sendPacket(i, data);
+					}
 				}
 			
 			} catch (IOException e) {
@@ -669,13 +700,14 @@ public class Node {
 				totalRecd++;
 			}
 		}
-		if (totalRecd > this.numNodes/2){ // has received a majority of responses
+		if (totalRecd > (this.numNodes-1)/2){ // has received a majority of responses
 			int maxNum = 0;
 			int index = -1;
 			LogEntry v;
 			boolean allNull = true;
-			for (int i = 0; i < this.responseNums.length; i++){
-				if (this.responseNums[i] != -1){
+			// check if all values are null
+			for (int i = 0; i < this.responseVals.length; i++){
+				if (this.responseVals[i] != null){
 					allNull = false;
 				}
 				if (this.responseNums[i] > maxNum){
@@ -685,8 +717,7 @@ public class Node {
 			}
 			if (allNull){
 				// choose my own value to send
-				//TODO may not be correct
-				v = this.accVal;
+				v = this.newEntry;
 			}
 			else{
 				v = this.responseVals[index];
@@ -759,13 +790,14 @@ public class Node {
 				totalRecd++;
 			}
 		}
-		if (totalRecd > this.numNodes/2){ // has received a majority of responses
+		if (totalRecd > (this.numNodes-1)/2){ // has received a majority of responses
 			int maxNum = 0;
 			int index = -1;
 			LogEntry v;
 			boolean allNull = true;
+			// TODO a lot of this looks unnecessary, perhaps delete
 			for (int i = 0; i < this.ackRespNums.length; i++){
-				if (this.ackRespNums[i] != -1){
+				if (this.responseVals[i] != null){
 					allNull = false;
 				}
 				if (this.ackRespNums[i] > maxNum){
@@ -775,14 +807,15 @@ public class Node {
 			}
 			if (allNull){
 				// choose my own value to send
-				//TODO may not be correct
-				v = this.accVal;
+				// at this point, all ack msgs received for this logPosition should have same accVal
+				v = accVal;
 			}
 			else{
 				v = this.ackRespVals[index];
 		
 			}
 			
+			updateCalendars(v);
 			// send commit message
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 			ObjectOutputStream os;
@@ -808,7 +841,8 @@ public class Node {
 	 */
 	public void commit(LogEntry v){
 		this.log.add(v.getLogPos(), v);
-		
+		//  need to update currentAppts and calendar stuff based on this new entry
+		updateCalendars(v);
 		// TODO write to storage in case of crash
 	}
 	
