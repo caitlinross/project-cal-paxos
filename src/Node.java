@@ -552,20 +552,16 @@ public class Node {
 	 * @param packet UDP packet received from another node
 	 * @param socket the socket the packet was received from
 	 */
-	public void receivePacket(DatagramSocket socket){
+	public void receivePacket(DatagramPacket packet){
 		// TODO  probably need some sort of queue for handling messages for different log entry
 		// i.e. only work on one log entry at a time, keep track with this.logPos
-		
 		int senderId = -1;
-		if (this.hostNames.contains(socket.getInetAddress().toString())){
-			senderId = this.hostNames.indexOf(socket.getInetAddress().toString());
+		if (this.hostNames.contains(packet.getAddress().toString())){
+			senderId = this.hostNames.indexOf(packet.getAddress().toString());
 		}
 
 		try {
-			byte[] buf = new byte[2000]; 
-			final DatagramPacket packet = new DatagramPacket(buf, buf.length);
-        	socket.receive(packet);
-			ByteArrayInputStream byteStream = new ByteArrayInputStream(buf);
+			ByteArrayInputStream byteStream = new ByteArrayInputStream(packet.getData());
 		    ObjectInputStream is = new ObjectInputStream(new BufferedInputStream(byteStream));
 		    int tmp = is.readInt();
 		    MessageType msg = MessageType.values()[tmp];

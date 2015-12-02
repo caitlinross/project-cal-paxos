@@ -97,12 +97,12 @@ public class Driver {
 		        try {
 		        	socket = new DatagramSocket(port);
 		            while (true) {
-		            	/*byte[] buf = new byte[2000];  // TODO change size to appropriate size later
+		            	byte[] buf = new byte[2000];  // TODO change size to appropriate size later
 		            	final DatagramPacket packet = new DatagramPacket(buf, buf.length);
-		            	socket.receive(packet);*/
+		            	socket.receive(packet);
 		            	Runnable runnable = new Runnable() {
 		                    public synchronized void run() {
-		                    	node.receivePacket(socket);
+		                    	node.receivePacket(packet);
 		                    }
 		                };
 		                new Thread(runnable).start();
@@ -199,7 +199,7 @@ public class Driver {
 				node.resetBadAppts();
 				node.setCantSched(false);
 			}*/
-			//in.close();
+			in.close();
 		}
 	}
 	
