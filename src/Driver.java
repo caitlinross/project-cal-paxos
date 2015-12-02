@@ -199,7 +199,7 @@ public class Driver {
 				node.resetBadAppts();
 				node.setCantSched(false);
 			}*/
-			in.close();
+			//in.close();
 		}
 	}
 	

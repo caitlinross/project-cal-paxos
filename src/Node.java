@@ -160,6 +160,7 @@ public class Node {
 				ObjectOutputStream os = new ObjectOutputStream(outputStream);
 				os.writeInt(MessageType.PREPARE.ordinal());
 				os.writeInt(this.m);
+				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send promise message to all other nodes
 				for (int i = 0; i < this.numNodes; i++){
@@ -632,6 +633,7 @@ public class Node {
 				os.writeInt(MessageType.PROMISE.ordinal());
 				os.writeInt(this.accNum);
 				os.writeObject(this.accVal);
+				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
 				sendPacket(senderId, data);
@@ -690,6 +692,7 @@ public class Node {
 				os.writeInt(MessageType.ACCEPT.ordinal());
 				os.writeInt(this.m);
 				os.writeObject(v);
+				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
 				sendPacket(senderId, data);
@@ -719,6 +722,7 @@ public class Node {
 				os.writeInt(MessageType.ACK.ordinal());
 				os.writeInt(this.accNum);
 				os.writeObject(this.accVal);
+				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
 				sendPacket(senderId, data);
@@ -775,6 +779,7 @@ public class Node {
 				os = new ObjectOutputStream(outputStream);
 				os.writeInt(MessageType.COMMIT.ordinal());
 				os.writeObject(v);
+				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
 				sendPacket(senderId, data);
