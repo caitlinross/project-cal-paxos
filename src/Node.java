@@ -122,6 +122,7 @@ public class Node {
 				for(Integer node:a.getParticipants()){
 					this.calendars[node][a.getDay().ordinal()][time] = 1;
 				}
+				time++;
 			}
 		}
 		
@@ -797,7 +798,7 @@ public class Node {
 			boolean allNull = true;
 			// TODO a lot of this looks unnecessary, perhaps delete
 			for (int i = 0; i < this.ackRespNums.length; i++){
-				if (this.responseVals[i] != null){
+				if (this.ackRespVals[i] != null){
 					allNull = false;
 				}
 				if (this.ackRespNums[i] > maxNum){
