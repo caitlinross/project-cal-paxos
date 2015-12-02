@@ -15,6 +15,7 @@ public class LogEntry implements Serializable {
 
 	private Set<Appointment> appts;
 	private int logPos;
+	private boolean unknown; 
 	/**
 	 * 
 	 */
@@ -22,6 +23,7 @@ public class LogEntry implements Serializable {
 		// TODO Auto-generated constructor stub
 		this.appts = new HashSet<Appointment>();
 		this.setLogPos(logPos);
+		this.setUnknown(true);
 	}
 	/**
 	 * @return the logPos
@@ -34,6 +36,22 @@ public class LogEntry implements Serializable {
 	 */
 	public void setLogPos(int logPos) {
 		this.logPos = logPos;
+	}
+	/**
+	 * @return the unknown
+	 */
+	public boolean isUnknown() {
+		return unknown;
+	}
+	/**
+	 * @param unknown the unknown to set
+	 */
+	public void setUnknown(boolean unknown) {
+		this.unknown = unknown;
+	}
+	
+	public void addAppt(Appointment appt){
+		this.appts.add(appt);
 	}
 
 }

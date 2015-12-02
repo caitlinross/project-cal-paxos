@@ -97,13 +97,12 @@ public class Driver {
 		        try {
 		        	socket = new DatagramSocket(port);
 		            while (true) {
-		            	byte[] buf = new byte[256];  // TODO change size to appropriate size later
+		            	byte[] buf = new byte[2000];  // TODO change size to appropriate size later
 		            	final DatagramPacket packet = new DatagramPacket(buf, buf.length);
 		            	socket.receive(packet);
 		            	Runnable runnable = new Runnable() {
 		                    public synchronized void run() {
-		                        // TODO pass packet to node object
-		                    	node.receivePacket(packet, socket);
+		                    	node.receivePacket(packet);
 		                    }
 		                };
 		                new Thread(runnable).start();
@@ -122,7 +121,6 @@ public class Driver {
 		// TODO perhaps add a "view log" that outputs all log entries the node knows about, to make it easier while demoing to Stacy
 		// loop to ask about adding, deleting, viewing appointments
 		while(true){
-			@SuppressWarnings("resource")
 			Scanner in = new Scanner(System.in);
 			String action;
 			String name;
@@ -201,6 +199,7 @@ public class Driver {
 				node.resetBadAppts();
 				node.setCantSched(false);
 			}*/
+			in.close();
 		}
 	}
 	

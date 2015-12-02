@@ -14,14 +14,17 @@ public class Node {
 	private int numNodes; 
 	private String logName;
 	private String stateLog;
+	private int leaderId;
+	private int incAmt; // amount to increment m (proposal numbers) by to have unique numbers
 	
 	// Paxos vars
 	private int maxPrepare;
 	private int accNum;
 	private LogEntry accVal;
 	private int m;
-	private ArrayList<LogEntry> log;
-	private int logPos;
+	private ArrayList<LogEntry> log; // store log entries in order
+	private int logPos; // which log position to work on
+	private LogEntry newEntry; // entry to try to add 
 	
 	// keeping track of promise and ack responses
 	private LogEntry[] responseVals;
@@ -54,6 +57,9 @@ public class Node {
 		}
 		this.maxPrepare = 0;
 		this.logPos = 0;
+		this.m = nodeID;  
+		this.incAmt = totalNodes;
+		this.newEntry = null;
 		
 		this.calendars = new int[totalNodes][7][48];
 		this.currentAppts = new HashSet<Appointment>();  // keep appointments from most recent log entry
@@ -72,6 +78,9 @@ public class Node {
 		// recover node state if this is restarting from crash
 		if (recovery)
 			restoreNodeState();
+		
+		// TODO remove this once leader election is added; just used to test Paxos without leader election and crashes
+		this.leaderId = 0;
 		
 	}
 
@@ -130,19 +139,59 @@ public class Node {
 				time++;
 			}
 			newAppt = new Appointment(name, day, start, end, sAMPM, eAMPM, nodes, this.nodeId);
-		
+			// create new log entry with this appt to try to submit
+			int logPos = log.size();
+			this.newEntry = createLogEntry(newAppt, logPos);
 		}
 		
-		// appointment involves other nodes besides itself; need to send messages
-		if (nodes.size() > 1 && newAppt != null){
-			for (Integer node:nodes){
-				if (node != this.nodeId){
-					System.out.println("Send new appt to node " + node);
-					send(node);
+		// need to send new LogEntry to leader
+		if (newAppt != null && this.nodeId != this.leaderId){
+			// increase proposal id before sending
+			this.m += this.incAmt;
+			// TODO using TCP to send to leader correct? (since we need to be able to check if the leader node is up or down?
+		}
+		else if (newAppt != null && this.nodeId == this.leaderId){
+			// handling for when leader wants to propose a new log entry
+			// increase proposal id
+			this.m += this.incAmt;
+			try{
+				// put m into byte array
+				ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+				ObjectOutputStream os = new ObjectOutputStream(outputStream);
+				os.writeInt(MessageType.PREPARE.ordinal());
+				os.writeInt(this.m);
+				byte[] data = outputStream.toByteArray();
+				// send promise message to all other nodes
+				for (int i = 0; i < this.numNodes; i++){
+					if (this.nodeId != i)
+						sendPacket(i, data);
 				}
+			
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
 		}
+		else // newAppt == null, appt conflicts with current calendar
+		{
+			System.out.println("This appointment conflicts!");
+		}
 		
+	}
+	
+	/**
+	 * create new log entry from currentAppts and the newly created appt
+	 * @param newAppt newly create appt
+	 * @param logPos position for this new log entry
+	 * @return the new log entry
+	 */
+	public LogEntry createLogEntry(Appointment newAppt, int logPos){
+		LogEntry e = new LogEntry(logPos);
+		for (Appointment appt:currentAppts){
+			e.addAppt(appt);
+		}
+		e.setUnknown(false);
+		e.addAppt(newAppt);
+		return e;
 	}
 	
 	/** TODO needs to be updated for Paxos
@@ -503,7 +552,7 @@ public class Node {
 	 * @param packet UDP packet received from another node
 	 * @param socket the socket the packet was received from
 	 */
-	public void receivePacket(DatagramPacket packet, DatagramSocket socket){
+	public void receivePacket(DatagramPacket packet){
 		// TODO  probably need some sort of queue for handling messages for different log entry
 		// i.e. only work on one log entry at a time, keep track with this.logPos
 		int senderId = -1;
@@ -541,14 +590,12 @@ public class Node {
 		    }
 		    is.close();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		catch (ClassNotFoundException e){
 			
 		}
 	      
-		
 	}
 	
 	/**
@@ -570,11 +617,12 @@ public class Node {
 	}
 	
 	/**
-	 * received a prepare msg from another node
+	 * received a prepare msg from proposer
 	 * @param m
 	 * @param logPos
+	 * @param senderId proposer's id num
 	 */
-	public void prepare(int m, int sender){
+	public void prepare(int m, int senderId){
 		if (m > maxPrepare){
 			maxPrepare = m;
 			try{
@@ -586,20 +634,20 @@ public class Node {
 				os.writeObject(this.accVal);
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
-				sendPacket(sender, data);
+				sendPacket(senderId, data);
 			
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}
 	}
 	
 	
-	/** received promise msg from another node
+	/** received promise msg from an acceptor node
 	 * 
 	 * @param accNum accepted proposal number
 	 * @param accVal accepted value
+	 * @param senderId acceptor's id num
 	 */
 	public void promise(int accNum, LogEntry accVal, int senderId){
 		this.responseVals[senderId] = accVal;
@@ -646,13 +694,18 @@ public class Node {
 				// send reply with accNum, accVal
 				sendPacket(senderId, data);
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 			
 		}
 	}
 	
+	/**
+	 * received accept msg from proposer
+	 * @param m proposal number
+	 * @param v LogEntry value
+	 * @param senderId propser's id number
+	 */
 	public void accept(int m, LogEntry v, int senderId){
 		if (m >= this.maxPrepare){
 			this.accNum = m;
@@ -670,12 +723,17 @@ public class Node {
 				// send reply with accNum, accVal
 				sendPacket(senderId, data);
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}
 	}
 	
+	/**
+	 * received ack msg from acceptor
+	 * @param accNum the proposal number that's been accepted
+	 * @param accVal the LogEntry that's been accepted
+	 * @param senderId acceptor's id num
+	 */
 	public void ack(int accNum, LogEntry accVal, int senderId){
 		this.ackRespVals[senderId] = accVal;
 		this.ackRespNums[senderId] = accNum;
@@ -721,7 +779,6 @@ public class Node {
 				// send reply with accNum, accVal
 				sendPacket(senderId, data);
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 			
@@ -729,8 +786,8 @@ public class Node {
 	}
 	
 	/**
-	 * simply record v in the log
-	 * @param v
+	 * received commit from the proposer
+	 * @param v the log entry to be committed
 	 */
 	public void commit(LogEntry v){
 		this.log.add(v.getLogPos(), v);
