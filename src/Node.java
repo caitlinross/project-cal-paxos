@@ -164,6 +164,7 @@ public class Node {
 				byte[] data = outputStream.toByteArray();
 				// send promise message to all other nodes
 				for (int i = 0; i < this.numNodes; i++){
+					System.out.println("Sending PREPARE msg to node " + i);
 					if (this.nodeId != i)
 						sendPacket(i, data);
 				}
@@ -556,16 +557,23 @@ public class Node {
 	public void receivePacket(DatagramPacket packet){
 		// TODO  probably need some sort of queue for handling messages for different log entry
 		// i.e. only work on one log entry at a time, keep track with this.logPos
+		
+		// TODO change this back when done testing on my personal computers
 		int senderId = -1;
-		if (this.hostNames.contains(packet.getAddress().toString())){
-			senderId = this.hostNames.indexOf(packet.getAddress().toString());
-		}
+		if (this.nodeId == 0)
+			senderId = 1;
+		else
+			senderId = 0;
+		//if (this.hostNames.contains(packet.getAddress().toString())){
+		//	senderId = this.hostNames.indexOf(packet.getAddress().toString());
+		//}
 
 		try {
 			ByteArrayInputStream byteStream = new ByteArrayInputStream(packet.getData());
 		    ObjectInputStream is = new ObjectInputStream(new BufferedInputStream(byteStream));
 		    int tmp = is.readInt();
 		    MessageType msg = MessageType.values()[tmp];
+		    System.out.println("Received " + msg + " msg from node " + senderId);
 		    if (msg.equals(MessageType.PREPARE)){
 		    	int m = is.readInt();
 		    	prepare(m, senderId);
@@ -636,6 +644,7 @@ public class Node {
 				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
+				System.out.println("Sending PROMISE msg to node " + senderId);
 				sendPacket(senderId, data);
 			
 			} catch (IOException e) {
@@ -695,6 +704,7 @@ public class Node {
 				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
+				System.out.println("Sending ACCEPT msg to node " + senderId);
 				sendPacket(senderId, data);
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -725,6 +735,7 @@ public class Node {
 				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
+				System.out.println("Sending ACK msg to node " + senderId);
 				sendPacket(senderId, data);
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -782,6 +793,7 @@ public class Node {
 				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
+				System.out.println("Sending COMMIT msg to node " + senderId);
 				sendPacket(senderId, data);
 			} catch (IOException e) {
 				e.printStackTrace();
