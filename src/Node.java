@@ -179,7 +179,7 @@ public class Node {
 		if (newAppt != null && this.nodeId != this.leaderId){
 			// increase proposal id before sending
 			this.m += this.incAmt;
-			// TODO using TCP to send to leader correct? (since we need to be able to check if the leader node is up or down?
+			sendProposal(this.newEntry);
 		}
 		else if (newAppt != null && this.nodeId == this.leaderId){
 			// handling for when leader wants to propose a new log entry
@@ -506,52 +506,81 @@ public class Node {
 	}
 	
 	/**
-	 *  receives <NP, T> from node k
+	 *  send proposed LogEntry to the distingushed proposer/leader
+	 */
+	public void sendProposal(LogEntry entry){
+		try {
+			Socket socket = new Socket(hostNames.get(this.leaderId), port);
+			OutputStream out = socket.getOutputStream();
+			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
+			objectOutput.writeInt(MessageType.PROPOSE.ordinal());  
+			objectOutput.writeInt(nodeId);
+			objectOutput.writeObject(entry); // entry should contain correct logPosition, so no need to send separately
+			objectOutput.close();
+			out.close();
+			socket.close();
+		} 
+		catch (IOException e) {
+			e.printStackTrace();
+		}
+        
+        
+	}
+	
+	/**
+	 *  receives TCP messages from other nodes
 	 * @param clientSocket socket connection to receiving node
 	 */
 	public void receive(Socket clientSocket){
-		// TODO probably can take this to use for a receive for leader election (this is already using TCP), just delete unneeded stuff
-		int k = -1;
-		//boolean cancellation = false;
-		int cancel = -1;
+		// at the moment, TCP should only receive PROPOSE messages
+		MessageType msg;
+		int senderId;
+		LogEntry entry = null;
 		try {
 			// get the objects from the message
 			InputStream in = clientSocket.getInputStream();
 			ObjectInputStream objectInput = new ObjectInputStream(in);
-			cancel = objectInput.readInt();
-			k = objectInput.readInt();
+			int tmp = objectInput.readInt();
+			msg = MessageType.values()[tmp];
+			if (msg.equals(MessageType.PROPOSE)){
+				senderId = objectInput.readInt();
+				entry = (LogEntry) objectInput.readObject();
+				checkProposal(senderId, entry);
+			}
 			objectInput.close();
 			in.close();
 		} 
-		catch (IOException e) {
+		catch (IOException | ClassNotFoundException e) {
 			e.printStackTrace();
 		} 
 		
-		// handle the appointments received
-		synchronized(lock){
-			
-			// check for appts in currentAppts that need to be deleted
-			HashSet<Appointment> delAppts = new HashSet<Appointment>();
-			for (Appointment appt:currentAppts){
-					delAppts.add(appt);
-					// update calendar
-					/*for (Integer id:dR.getAppointment().getParticipants()) {
-						for (int j = dR.getAppointment().getStartIndex(); j < dR.getAppointment().getEndIndex(); j++) {
-							this.calendars[id][dR.getAppointment().getDay().ordinal()][j] = 0;
-						}
-					}*/
-				}
-			
-			// now actually remove appointments from currentAppts
-			for (Appointment appt:delAppts){
-				currentAppts.remove(appt);
+	}
+	
+	public void checkProposal(int senderId, LogEntry newEntry){
+		// check if this log entry is feasible 
+		// save newEntry's appts into a temp set
+		HashSet<Appointment> tmpSet = new HashSet<Appointment>();
+		for (Appointment a:newEntry.getAppts()){
+			tmpSet.add(a);
+		}
+		
+		// for each appt in currentAppts, if appt in tmpAppts, delete from tmpAppts
+		// else remember that this is a deleted appointment
+		for (Appointment a:currentAppts){
+			if (tmpSet.contains(a)){
+				tmpSet.remove(a);
 			}
-			
-			saveNodeState();
-
-		}// end synchronize
+			else {// not in tmpSet, means this appointment has been deleted
+				// TODO handle this appropriately
+			}
+		}
 		
-		
+		// any remaining appts in tmpAppts are new and should be checked for conflicts
+		if (!tmpSet.isEmpty()){
+			for (Appointment a:tmpSet){
+				// TODO finish this
+			}
+		}
 		
 	}
 	

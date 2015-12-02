@@ -121,6 +121,7 @@ public class Driver {
 		// TODO perhaps add a "view log" that outputs all log entries the node knows about, to make it easier while demoing to Stacy
 		// loop to ask about adding, deleting, viewing appointments
 		while(true){
+			@SuppressWarnings("resource")
 			Scanner in = new Scanner(System.in);
 			String action;
 			String name;
@@ -199,7 +200,7 @@ public class Driver {
 				node.resetBadAppts();
 				node.setCantSched(false);
 			}*/
-			//in.close();
+			
 		}
 	}
 	

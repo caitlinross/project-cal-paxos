@@ -3,5 +3,5 @@
  * Enum to identify message types
  */
 public enum MessageType {
-	PREPARE, PROMISE, ACCEPT, ACK, COMMIT
+	PREPARE, PROMISE, ACCEPT, ACK, COMMIT, PROPOSE
 }

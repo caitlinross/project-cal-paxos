@@ -207,4 +207,77 @@ public class Appointment implements Serializable, Comparable<Appointment> {
 		return index;
 	}
 	
+	/* (non-Javadoc)
+	 * @see java.lang.Object#hashCode()
+	 */
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ((apptID == null) ? 0 : apptID.hashCode());
+		result = prime * result + ((day == null) ? 0 : day.hashCode());
+		result = prime * result + ((eAMPM == null) ? 0 : eAMPM.hashCode());
+		result = prime * result + end;
+		result = prime * result + endIndex;
+		result = prime * result + initNode;
+		result = prime * result + ((name == null) ? 0 : name.hashCode());
+		result = prime * result + ((participants == null) ? 0 : participants.hashCode());
+		result = prime * result + ((sAMPM == null) ? 0 : sAMPM.hashCode());
+		result = prime * result + start;
+		result = prime * result + startIndex;
+		return result;
+	}
+
+	/* (non-Javadoc)
+	 * @see java.lang.Object#equals(java.lang.Object)
+	 */
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (!(obj instanceof Appointment))
+			return false;
+		Appointment other = (Appointment) obj;
+		if (apptID == null) {
+			if (other.apptID != null)
+				return false;
+		} else if (!apptID.equals(other.apptID))
+			return false;
+		if (day != other.day)
+			return false;
+		if (eAMPM == null) {
+			if (other.eAMPM != null)
+				return false;
+		} else if (!eAMPM.equals(other.eAMPM))
+			return false;
+		if (end != other.end)
+			return false;
+		if (endIndex != other.endIndex)
+			return false;
+		if (initNode != other.initNode)
+			return false;
+		if (name == null) {
+			if (other.name != null)
+				return false;
+		} else if (!name.equals(other.name))
+			return false;
+		if (participants == null) {
+			if (other.participants != null)
+				return false;
+		} else if (!participants.equals(other.participants))
+			return false;
+		if (sAMPM == null) {
+			if (other.sAMPM != null)
+				return false;
+		} else if (!sAMPM.equals(other.sAMPM))
+			return false;
+		if (start != other.start)
+			return false;
+		if (startIndex != other.startIndex)
+			return false;
+		return true;
+	}
+	
 }
