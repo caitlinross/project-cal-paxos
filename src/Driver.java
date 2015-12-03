@@ -97,7 +97,7 @@ public class Driver {
 		        try {
 		        	socket = new DatagramSocket(port);
 		            while (true) {
-		            	byte[] buf = new byte[2000];  // TODO change size to appropriate size later
+		            	byte[] buf = new byte[2000];  
 		            	final DatagramPacket packet = new DatagramPacket(buf, buf.length);
 		            	socket.receive(packet);
 		            	Runnable runnable = new Runnable() {

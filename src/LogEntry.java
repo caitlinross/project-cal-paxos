@@ -17,10 +17,9 @@ public class LogEntry implements Serializable {
 	private int logPos;
 	private boolean unknown; 
 	/**
-	 * 
+	 * @param logPosition the position in the log for this entry
 	 */
 	public LogEntry(int logPos) {
-		// TODO Auto-generated constructor stub
 		this.appts = new HashSet<Appointment>();
 		this.setLogPos(logPos);
 		this.setUnknown(true);

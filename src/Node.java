@@ -129,7 +129,9 @@ public class Node {
 	}
 
 	
-	/** TODO needs to send info to distinguished proposer
+	/** creates a new appointment from the given info
+	 * if this node is leader, check for calendar conflict; if none start paxos
+	 * if node != leader, send to leader who will check for conflict 
 	 * 
 	 * @param nodes participants in the new appointment
 	 * @param name name of appointment
@@ -280,43 +282,6 @@ public class Node {
 			}
 			apptList.clear();
 		}
-	}
-	
-	
-	/**
-	 *  write an event to the log
-	 * @param eR the event record to write to log
-	 */
-	public void writeToLog(){
-		// TODO probably delete this and only use saveNodeState() for saving necessary log info
-		/*try{
-			FileWriter fw = new FileWriter(this.logName, true);
-			BufferedWriter bw = new BufferedWriter(fw);
-			bw.write("------- new event record -------\n");
-			bw.write("Operation: " + eR.getOperation() + "\n");
-			bw.write("Node clock: " + eR.getTime() + "\n");
-			bw.write("Node Id: " + eR.getNodeId() + "\n");
-			bw.write("Appointment to be ");
-			if (eR.getOperation().equals("delete"))
-				bw.write("deleted from ");
-			else
-				bw.write("added to ");
-			bw.write("dictionary\n");
-			bw.write("Appointment name: " + eR.getAppointment().getName() + "\n");
-			bw.write("Appointment id: " + eR.getAppointment().getApptID() + "\n");
-			bw.write("Day: " + eR.getAppointment().getDay() + "\n");
-			bw.write("Start time: " + eR.getAppointment().getStart() + "\n");
-			bw.write("End time: " + eR.getAppointment().getEnd() + "\n");
-			bw.write("Participants: ");
-			for (Integer node:eR.getAppointment().getParticipants()){
-				bw.write(node + " ");
-			}
-			bw.write("\n");
-			bw.close();
-		}
-		catch (IOException e){
-			e.printStackTrace();
-		}*/
 	}
 	
 	/**
@@ -488,6 +453,7 @@ public class Node {
 	
 	/**
 	 *  send proposed LogEntry to the distingushed proposer/leader
+	 *  @param entry log entry to be proposed
 	 */
 	public void sendProposal(LogEntry entry){
 		try {
@@ -596,7 +562,10 @@ public class Node {
 		
 		if (conflict){
 			// send msg to node that there's a conflict
-			sendConflictMsg(senderId, 0); // TODO get correct log position
+			if (!this.log.get(this.log.size()-1).isUnknown()) // make sure that leader actually has this log entry's info
+				sendConflictMsg(senderId, this.log.get(this.log.size()-1)); // TODO get correct log position
+			else  // for some reason, leader doesn't have info, shouldn't happen
+				System.out.println("SOMETHING'S WRONG! leader doesn't have most up to date");
 		}
 		else {
 			// start paxos
@@ -608,16 +577,17 @@ public class Node {
 	/**
 	 * send conflict message to node k
 	 * @param k
+	 * @param entry 
 	 */
-	public void sendConflictMsg(int k, int logPos){
-		// TODO leader node uses this to notify node k that it's log entry conflicts/can't run it thru Paxos
+	public void sendConflictMsg(int k, LogEntry entry){
+		// leader node uses this to notify node k that it's log entry conflicts/can't run it thru Paxos
 		try {
 			Socket socket = new Socket(hostNames.get(k), port);
 			OutputStream out = socket.getOutputStream();
 			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
 			
 			objectOutput.writeInt(MessageType.CONFLICT.ordinal());
-			objectOutput.writeInt(logPos);
+			objectOutput.writeObject(entry);
 			objectOutput.close();
 			out.close();
 			socket.close();
