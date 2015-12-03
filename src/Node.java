@@ -183,27 +183,7 @@ public class Node {
 		}
 		else if (newAppt != null && this.nodeId == this.leaderId){
 			// handling for when leader wants to propose a new log entry
-			// increase proposal id
-			this.m += this.incAmt;
-			try{
-				// put m into byte array
-				ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-				ObjectOutputStream os = new ObjectOutputStream(outputStream);
-				os.writeInt(MessageType.PREPARE.ordinal());
-				os.writeInt(this.m);
-				os.flush();
-				byte[] data = outputStream.toByteArray();
-				// send promise message to all other nodes
-				for (int i = 0; i < this.numNodes; i++){
-					if (this.nodeId != i) {
-						System.out.println("Sending PREPARE msg to node " + i);
-						sendPacket(i, data);
-					}
-				}
-			
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+			startPaxos();
 		}
 		else // newAppt == null, appt conflicts with current calendar
 		{
@@ -211,6 +191,7 @@ public class Node {
 		}
 		
 	}
+	
 	
 	/**
 	 * create new log entry from currentAppts and the newly created appt
@@ -532,7 +513,7 @@ public class Node {
 	 * @param clientSocket socket connection to receiving node
 	 */
 	public void receive(Socket clientSocket){
-		// at the moment, TCP should only receive PROPOSE messages
+		// at the moment, TCP should only receive PROPOSE and CONFLICT messages
 		MessageType msg;
 		int senderId;
 		LogEntry entry = null;
@@ -546,6 +527,10 @@ public class Node {
 				senderId = objectInput.readInt();
 				entry = (LogEntry) objectInput.readObject();
 				checkProposal(senderId, entry);
+			}
+			else if (msg.equals(MessageType.CONFLICT)){
+				// TODO node received conflict message from the leader
+				// report that appointment to be added has a conflict to user
 			}
 			objectInput.close();
 			in.close();
@@ -564,48 +549,83 @@ public class Node {
 			tmpSet.add(a);
 		}
 		
+		// create a tmpCal for checking for conflicts
+		int[][][] tmpCal = new int[numNodes][7][48];
+		
 		// for each appt in currentAppts, if appt in tmpAppts, delete from tmpAppts
 		// else remember that this is a deleted appointment
 		for (Appointment a:currentAppts){
 			if (tmpSet.contains(a)){
+				// update tmp cal when a is in both sets
+				int time = a.getStartIndex();
+				int end = a.getEndIndex();
+				while (time < end){
+					for (Integer node:a.getParticipants()){
+						tmpCal[node][a.getDay().ordinal()][time] = 1;
+					}
+					time++;
+				}
 				tmpSet.remove(a);
 			}
 			else {// not in tmpSet, means this appointment has been deleted
+				// don't add to tmpCal
 				// TODO handle this appropriately
 			}
 		}
 		
 		// any remaining appts in tmpAppts are new and should be checked for conflicts
+		boolean conflict = false;
 		if (!tmpSet.isEmpty()){
 			for (Appointment a:tmpSet){
-				// TODO finish this
+				// check for conflicts against tmpCal
+				int time = a.getStartIndex();
+				int end = a.getEndIndex();
+				while (time < end){
+					for (Integer node:a.getParticipants()){
+						if (tmpCal[node][a.getDay().ordinal()][time] == 1){
+							conflict = true;
+							break;
+						}
+					}
+					
+				}
+				if (conflict)
+					break;
 			}
+		}
+		
+		if (conflict){
+			// send msg to node that there's a conflict
+			sendConflictMsg(senderId, 0); // TODO get correct log position
+		}
+		else {
+			// start paxos
+			startPaxos();
 		}
 		
 	}
 	
-	
-	public void sendCancellationMsg(String apptID, final int k){
-		// TODO maybe leader node uses something like this to tell another node that the appointment it wants to create has a conflict
-		// or should that be done by a UDP packet
-		//if (eR != null){
-			try {
-				Socket socket = new Socket(hostNames.get(k), port);
-				OutputStream out = socket.getOutputStream();
-				ObjectOutputStream objectOutput = new ObjectOutputStream(out);
-				synchronized(lock){
-					//objectOutput.writeObject(eR);
-					//objectOutput.writeObject(T);
-				}
-				objectOutput.writeInt(nodeId);
-				objectOutput.close();
-				out.close();
-				socket.close();
-			} 
-			catch (IOException e) {
-				e.printStackTrace();
-			}
-		//}
+	/**
+	 * send conflict message to node k
+	 * @param k
+	 */
+	public void sendConflictMsg(int k, int logPos){
+		// TODO leader node uses this to notify node k that it's log entry conflicts/can't run it thru Paxos
+		try {
+			Socket socket = new Socket(hostNames.get(k), port);
+			OutputStream out = socket.getOutputStream();
+			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
+			
+			objectOutput.writeInt(MessageType.CONFLICT.ordinal());
+			objectOutput.writeInt(logPos);
+			objectOutput.close();
+			out.close();
+			socket.close();
+		} 
+		catch (IOException e) {
+			e.printStackTrace();
+		}
+		
 	}
 	
 	/*****  PAXOS specific functions below here *****/
@@ -687,6 +707,33 @@ public class Node {
 	}
 	
 	/**
+	 * increment m and send new prepare msg to all other nodes
+	 */
+	public void startPaxos(){
+		// increase proposal id
+		this.m += this.incAmt;
+		try{
+			// put m into byte array
+			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+			ObjectOutputStream os = new ObjectOutputStream(outputStream);
+			os.writeInt(MessageType.PREPARE.ordinal());
+			os.writeInt(this.m);
+			os.flush();
+			byte[] data = outputStream.toByteArray();
+			// send promise message to all other nodes
+			for (int i = 0; i < this.numNodes; i++){
+				if (this.nodeId != i) {
+					System.out.println("Sending PREPARE msg to node " + i);
+					sendPacket(i, data);
+				}
+			}
+		
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	/**
 	 * received a prepare msg from proposer
 	 * @param m
 	 * @param logPos
@@ -735,11 +782,13 @@ public class Node {
 			int index = -1;
 			LogEntry v;
 			boolean allNull = true;
-			// check if all values are null
+			
 			for (int i = 0; i < this.responseVals.length; i++){
+				// check if all values are null
 				if (this.responseVals[i] != null){
 					allNull = false;
 				}
+				// find largest accNum to choose correct accVal
 				if (this.responseNums[i] > maxNum){
 					maxNum = this.responseNums[i];
 					index = i;
@@ -751,7 +800,6 @@ public class Node {
 			}
 			else{
 				v = this.responseVals[index];
-		
 			}
 			
 			// send accept message
@@ -764,9 +812,14 @@ public class Node {
 				os.writeObject(v);
 				os.flush();
 				byte[] data = outputStream.toByteArray();
-				// send reply with accNum, accVal
-				System.out.println("Sending ACCEPT msg to node " + senderId);
-				sendPacket(senderId, data);
+				// send reply with m and v
+				for (int i = 0; i < this.numNodes; i++){
+					if (this.nodeId != i) {
+						System.out.println("Sending ACCEPT msg to node " + i);
+						sendPacket(i, data);
+					}
+				}
+				
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -821,31 +874,12 @@ public class Node {
 			}
 		}
 		if (totalRecd > (this.numNodes-1)/2){ // has received a majority of responses
-			int maxNum = 0;
-			int index = -1;
-			LogEntry v;
-			boolean allNull = true;
-			// TODO a lot of this looks unnecessary, perhaps delete
-			for (int i = 0; i < this.ackRespNums.length; i++){
-				if (this.ackRespVals[i] != null){
-					allNull = false;
-				}
-				if (this.ackRespNums[i] > maxNum){
-					maxNum = this.ackRespNums[i];
-					index = i;
-				}
-			}
-			if (allNull){
-				// choose my own value to send
-				// at this point, all ack msgs received for this logPosition should have same accVal
-				v = accVal;
-			}
-			else{
-				v = this.ackRespVals[index];
-		
-			}
+			// at this point, all ack msgs received for this logPosition should have same accVal
+			LogEntry v = accVal;
 			
+			// update proposing node's calendars
 			updateCalendars(v);
+			
 			// send commit message
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 			ObjectOutputStream os;
@@ -855,9 +889,13 @@ public class Node {
 				os.writeObject(v);
 				os.flush();
 				byte[] data = outputStream.toByteArray();
-				// send reply with accNum, accVal
-				System.out.println("Sending COMMIT msg to node " + senderId);
-				sendPacket(senderId, data);
+				// send reply with v
+				for (int i = 0; i < this.numNodes; i++){
+					if (this.nodeId != i) {
+						System.out.println("Sending COMMIT msg to node " + i);
+						sendPacket(i, data);
+					}
+				}
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
