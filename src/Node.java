@@ -495,8 +495,14 @@ public class Node {
 				checkProposal(senderId, entry);
 			}
 			else if (msg.equals(MessageType.CONFLICT)){
-				// TODO node received conflict message from the leader
-				// report that appointment to be added has a conflict to user
+				// node received conflict message from the leader
+				entry = (LogEntry) objectInput.readObject(); // this is most recent log entry
+				// add to log and update the calendars
+				this.log.add(entry.getLogPos(), entry);
+				updateCalendars(entry);
+				
+				// TODO report that appointment to be added has a conflict to user, or not;
+				// without it will update on the node and user will be able to view up to date calendar
 			}
 			objectInput.close();
 			in.close();
@@ -563,7 +569,7 @@ public class Node {
 		if (conflict){
 			// send msg to node that there's a conflict
 			if (!this.log.get(this.log.size()-1).isUnknown()) // make sure that leader actually has this log entry's info
-				sendConflictMsg(senderId, this.log.get(this.log.size()-1)); // TODO get correct log position
+				sendConflictMsg(senderId, this.log.get(this.log.size()-1)); 
 			else  // for some reason, leader doesn't have info, shouldn't happen
 				System.out.println("SOMETHING'S WRONG! leader doesn't have most up to date");
 		}
@@ -585,7 +591,6 @@ public class Node {
 			Socket socket = new Socket(hostNames.get(k), port);
 			OutputStream out = socket.getOutputStream();
 			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
-			
 			objectOutput.writeInt(MessageType.CONFLICT.ordinal());
 			objectOutput.writeObject(entry);
 			objectOutput.close();
