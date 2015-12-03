@@ -15,8 +15,11 @@ public class Node {
 	private String logName;
 	private String stateLog;
 	
-	// Paxos vars
+	//leader election vars
 	private int proposerID;
+	private boolean currentHighest;
+	
+	// Paxos vars
 	private int maxPrepare;
 	private int accNum;
 	private LogEntry accVal;
@@ -61,6 +64,12 @@ public class Node {
 		//do we automatically assume 4 is the proposer for each 
 		//recovered process and if not do an election? 
 		this.proposerID = this.numNodes-1;
+		if (nodeId == numNodes-1) {
+			currentHighest = true;
+		}
+		else {
+			currentHighest = false;
+		}
 		
 		this.calendars = new int[totalNodes][7][48];
 		this.currentAppts = new HashSet<Appointment>();  // keep appointments from most recent log entry
@@ -114,7 +123,7 @@ public class Node {
 		/*get calendar value and currentAppt list from last logEntry in log, 
 		*if log is empty, calendar is all zeros  and apptList is empty by default
 		*don't need to clear these values if new calendar isn't accepted by Paxos
-		*since it will be overwritten each time anyway, only successfull versions 
+		*since it will be overwritten each time anyway, only successful versions 
 		*get saved to new logEntry
 		*/
 		if (log.size() > 0) {
@@ -153,10 +162,10 @@ public class Node {
 		
 		// send message to distinguished proposer, unless self is proposer
 		if (proposerID != nodeId ) {
-			send(proposerID);
+			//send(proposerID);
 			//waits for ack or cancellation message
 			//if none received, run leader election
-			bullyElection(nodeId);
+			election();
 		}
 		else {
 			//run paxos
@@ -196,21 +205,28 @@ public class Node {
 				}
 				// send message to distinguished proposer, unless self is proposer
 				if (proposerID != nodeId ) {
-					send(proposerID);
+					//send(proposerID);
 					//waits for response from proposer
 					/* Caitlin: So the driver is set up to listen for both TCP and UDP messages.  You probably shouldn't be calling
 					 * receive() here.  The driver will get any message and forward it to the correct receive function 
 					 * (either receive() for TCP msgs or receivePacket() for UDP msgs).  You should change the receive() function
 					 * to do what you want to do here.
 					*/
-					receive(proposerID);
+					//delete: receive(proposerID);
+					//upon receiving responses from other nodes, store them in a list
+					//select largest element
+					//message other nodes with new leader id
 					
 					//TODO: set up how to check is leader is down--
 					//current idea: just have it wait a small time amount, resend msg and if fails again, run election
 					//waits for ack or cancellation message
 					//if none received, run leader election
 					
-					//TODO: bullyElection(nodeID); -- will have to wait until the airport tomorrow
+					//new idea: heartbeat() in driver, every process sends their current time and id to everyone else
+					//when want to send new calendar to leader, if leader's last sent message is more than a certain time length away
+					//do election
+					
+					//TODO: bullyElection(nodeID); 
 				}
 				else {
 					//run paxos
@@ -223,10 +239,15 @@ public class Node {
 	/**
 	 * elects new leader 
 	 */
-	public void bullyElection(int id) {
-		for (int i=0; i++; i < numNodes) {
-			if (i!=nodeID){
-				sendPacket(i, data)
+	public void election() {
+		//for now, assume yourself is the current highest
+		//this will only change back to false upon receiving an ok or coordinator message
+		//so if none other received after some time, can assume self is leader
+		currentHighest = true;
+		for (int i=0; i < numNodes; i++) {
+			if (i > nodeId){
+				//send 'election' to all nodes with higher ids
+				electionSend(i, 1);
 				/*
 				 * Caitlin: Actually you shouldn't be using sendPacket() for the election.  That is using UDP to send a message, but 
 				 * you should be using TCP for election.  You can use send() here though.  send() is just old code from the prev project
@@ -235,14 +256,114 @@ public class Node {
 				 * Essentially you just catch the errors that are thrown when a node is down.  I can't remember what they are off the 
 				 * top of my head, but you should be able to find it in the last project code.
 				 */
-				//TODO: finish function, I think sendPAcket is the way to go, I just need to bettew understand all the tcp stuff
-				//plan: send election message as the data parameter
-				//then wait some amount for time for messages back from all others, store ids and pick highest as leader
-				//sendPacket() again to each, sending id of leader to each
+
 			}
 		}
 		
 	}
+	
+	
+	/**
+	 *  sends 'Election' and sender id to node k
+	 * @param k node to send to
+	 */
+	public void electionSend(final int k, int msgType){
+		// TODO can use this for leader election stuff, just change what's written to the socket (this already uses TCP)
+		/*
+		 * Caitlin:  This is the function that you can change to use for send() in leader election.  I think you really only
+		 * need to change what you write to objectOutput
+		 */
+		try {
+			Socket socket = new Socket(hostNames.get(k), port);
+			OutputStream out = socket.getOutputStream();
+			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
+			objectOutput.writeInt(0);  // 0 means sending set of events
+			objectOutput.writeInt(msgType); //1 - election, 2 - ok, 3 - coordinator
+			objectOutput.writeInt(nodeId);
+			objectOutput.close();
+			out.close();
+			socket.close();
+		} 
+		catch (IOException e) {
+			e.printStackTrace();
+		}
+           
+	}
+	
+	/**
+	 *  receives election info
+	 * @param clientSocket socket connection to receiving node
+	 */
+	public void receive(Socket clientSocket){
+		/*
+		 * Caitlin: So when the driver gets a TCP packet, it's set to call this function, which passes the socket connection.
+		 * You just need to pull out the objects that you wrote in during the send() function.  Again, this is all just old code; feel
+		 * free to change as needed.
+		 */
+		// TODO probably can take this to use for a receive for leader election (this is already using TCP), just delete unneeded stuff
+		int k = -1;
+		int type = -1;
+		int sender = -1;
+		try {
+			// get the objects from the message
+			InputStream in = clientSocket.getInputStream();
+			ObjectInputStream objectInput = new ObjectInputStream(in);
+			k = objectInput.readInt();
+			type = objectInput.readInt();
+			sender = objectInput.readInt();	
+			//type will be 1 - election, 2 - ok, 3 - coordinator
+			//sender is node who sent it
+			objectInput.close();
+			
+			in.close();
+		} 
+		catch (IOException e) {
+			e.printStackTrace();
+		} 
+		//own id is higher than election initiator
+		if ((type == 1) && (nodeId > sender)) {
+			electionSend(sender, 2);
+			election();
+		}
+		if (type == 2) {
+			//self is not leader
+		}
+		if (type == 3) {
+			//received coordinator msg - set sender to proposer
+			proposerID = sender;
+		}
+
+		
+		
+		//probs don't need but not sure yet
+//		// handle the appointments received
+//		synchronized(lock){
+//			
+//			// check for appts in currentAppts that need to be deleted
+//			HashSet<Appointment> delAppts = new HashSet<Appointment>();
+//			for (Appointment appt:currentAppts){
+//					delAppts.add(appt);
+//					// update calendar
+//					/*for (Integer id:dR.getAppointment().getParticipants()) {
+//						for (int j = dR.getAppointment().getStartIndex(); j < dR.getAppointment().getEndIndex(); j++) {
+//							this.calendars[id][dR.getAppointment().getDay().ordinal()][j] = 0;
+//						}
+//					}*/
+//				}
+//			
+//			// now actually remove appointments from currentAppts
+//			for (Appointment appt:delAppts){
+//				currentAppts.remove(appt);
+//			}
+//			
+//			saveNodeState();
+//
+//		}// end synchronize
+		
+		
+		
+	}
+	
 	
 	/**
 	 * print out the calendar to the terminal
@@ -457,90 +578,6 @@ public class Node {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-	}
-	
-	
-	/**
-	 *  creates NP, then sends <NP, T> to node k
-	 * @param k node to send to
-	 */
-	public void send(final int k){
-		// TODO can use this for leader election stuff, just change what's written to the socket (this already uses TCP)
-		/*
-		 * Caitlin:  This is the function that you can change to use for send() in leader election.  I think you really only
-		 * need to change what you write to objectOutput
-		 */
-		try {
-			Socket socket = new Socket(hostNames.get(k), port);
-			OutputStream out = socket.getOutputStream();
-			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
-			objectOutput.writeInt(0);  // 0 means sending set of events
-			
-			objectOutput.writeInt(nodeId);
-			objectOutput.close();
-			out.close();
-			socket.close();
-		} 
-		catch (IOException e) {
-			e.printStackTrace();
-		}
-        
-        
-	}
-	
-	/**
-	 *  receives <NP, T> from node k
-	 * @param clientSocket socket connection to receiving node
-	 */
-	public void receive(Socket clientSocket){
-		/*
-		 * Caitlin: So when the driver gets a TCP packet, it's set to call this function, which passes the socket connection.
-		 * You just need to pull out the objects that you wrote in during the send() function.  Again, this is all just old code; feel
-		 * free to change as needed.
-		 */
-		// TODO probably can take this to use for a receive for leader election (this is already using TCP), just delete unneeded stuff
-		int k = -1;
-		//boolean cancellation = false;
-		int cancel = -1;
-		try {
-			// get the objects from the message
-			InputStream in = clientSocket.getInputStream();
-			ObjectInputStream objectInput = new ObjectInputStream(in);
-			cancel = objectInput.readInt();
-			k = objectInput.readInt();
-			objectInput.close();
-			in.close();
-		} 
-		catch (IOException e) {
-			e.printStackTrace();
-		} 
-		
-		// handle the appointments received
-		synchronized(lock){
-			
-			// check for appts in currentAppts that need to be deleted
-			HashSet<Appointment> delAppts = new HashSet<Appointment>();
-			for (Appointment appt:currentAppts){
-					delAppts.add(appt);
-					// update calendar
-					/*for (Integer id:dR.getAppointment().getParticipants()) {
-						for (int j = dR.getAppointment().getStartIndex(); j < dR.getAppointment().getEndIndex(); j++) {
-							this.calendars[id][dR.getAppointment().getDay().ordinal()][j] = 0;
-						}
-					}*/
-				}
-			
-			// now actually remove appointments from currentAppts
-			for (Appointment appt:delAppts){
-				currentAppts.remove(appt);
-			}
-			
-			saveNodeState();
-
-		}// end synchronize
-		
-		
-		
 	}
 	
 	
