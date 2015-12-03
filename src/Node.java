@@ -16,6 +16,7 @@ public class Node {
 	private String stateLog;
 	private int leaderId;
 	private int incAmt; // amount to increment m (proposal numbers) by to have unique numbers
+	private boolean stillUpdating;
 	
 	// Paxos vars
 	private int maxPrepare;
@@ -60,6 +61,7 @@ public class Node {
 		this.m = nodeID;  
 		this.incAmt = totalNodes;
 		this.newEntry = null;
+		this.stillUpdating = true;
 		
 		this.calendars = new int[totalNodes][7][48];
 		this.currentAppts = new HashSet<Appointment>();  // keep appointments from most recent log entry
@@ -185,7 +187,8 @@ public class Node {
 		}
 		else if (newAppt != null && this.nodeId == this.leaderId){
 			// handling for when leader wants to propose a new log entry
-			startPaxos();
+			this.logPos = this.newEntry.getLogPos();
+			startPaxos(this.logPos);
 		}
 		else // newAppt == null, appt conflicts with current calendar
 		{
@@ -432,7 +435,7 @@ public class Node {
 	 * @param k node to send to
 	 */
 	public void send(final int k){
-		// TODO can use this for leader election stuff, just change what's written to the socket (this already uses TCP)
+		// TODO can probably be deleted
 		try {
 			Socket socket = new Socket(hostNames.get(k), port);
 			OutputStream out = socket.getOutputStream();
@@ -574,8 +577,8 @@ public class Node {
 				System.out.println("SOMETHING'S WRONG! leader doesn't have most up to date");
 		}
 		else {
-			// start paxos
-			startPaxos();
+			// TODO start paxos
+			//startPaxos();
 		}
 		
 	}
@@ -632,7 +635,8 @@ public class Node {
 		    System.out.println("Received " + msg + " msg from node " + senderId);
 		    if (msg.equals(MessageType.PREPARE)){
 		    	int m = is.readInt();
-		    	prepare(m, senderId);
+		    	int logPos = is.readInt();
+		    	prepare(m, logPos, senderId);
 		    }
 		    else if (msg.equals(MessageType.PROMISE)){
 		    	int accNum = is.readInt();
@@ -682,9 +686,30 @@ public class Node {
 	}
 	
 	/**
+	 * leader should use this at beginning or whenever a new leader is selected
+	 * to get all log entries
+	 * 
+	 */
+	public void getUpdates(){
+		for (LogEntry entry:log){
+			if (entry.isUnknown()){ // need to get information about this entry
+				// kick-off synod alg for each log position that the leader doesn't have info for
+				startPaxos(entry.getLogPos()); 
+			}
+			
+		}
+		
+		// could be newer entries at end of log array that other nodes know about but not this one
+		// execute synod algorithm to see if this is true
+		// will know for certain after receiving enough promise msgs
+		this.logPos = this.log.size();
+		startPaxos(this.logPos);
+	}
+	
+	/**
 	 * increment m and send new prepare msg to all other nodes
 	 */
-	public void startPaxos(){
+	public void startPaxos(int LogPos){
 		// increase proposal id
 		this.m += this.incAmt;
 		try{
@@ -693,6 +718,7 @@ public class Node {
 			ObjectOutputStream os = new ObjectOutputStream(outputStream);
 			os.writeInt(MessageType.PREPARE.ordinal());
 			os.writeInt(this.m);
+			os.writeInt(logPos);
 			os.flush();
 			byte[] data = outputStream.toByteArray();
 			// send promise message to all other nodes
@@ -714,7 +740,7 @@ public class Node {
 	 * @param logPos
 	 * @param senderId proposer's id num
 	 */
-	public void prepare(int m, int senderId){
+	public void prepare(int m, int logPos, int senderId){
 		if (m > maxPrepare){
 			maxPrepare = m;
 			try{
@@ -769,7 +795,8 @@ public class Node {
 					index = i;
 				}
 			}
-			if (allNull){
+			if (stillUpdating && allNull){
+				this.stillUpdating = false;
 				// choose my own value to send
 				v = this.newEntry;
 			}
