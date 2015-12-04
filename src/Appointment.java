@@ -279,5 +279,15 @@ public class Appointment implements Serializable, Comparable<Appointment> {
 			return false;
 		return true;
 	}
+
+	/* (non-Javadoc)
+	 * @see java.lang.Object#toString()
+	 */
+	@Override
+	public String toString() {
+		return "Appointment [name=" + name + ", day=" + day.ordinal() + ", start=" + start + ", end=" + end + ", sAMPM=" + sAMPM
+				+ ", eAMPM=" + eAMPM + ", participants=" + participants + ", initNode=" + initNode + ", apptID="
+				+ apptID + ", startIndex=" + startIndex + ", endIndex=" + endIndex + "]";
+	}
 	
 }

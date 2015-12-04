@@ -13,7 +13,6 @@ public class Node {
 	private ArrayList<String> hostNames;
 	private int nodeId;
 	private int numNodes; 
-	private String logName;
 	private String stateLog;
 	private int leaderId;
 	private int incAmt; // amount to increment m (proposal numbers) by to have unique numbers
@@ -48,26 +47,25 @@ public class Node {
 	 * @param recovery is this a recovery startup?	
 	 */
 	public Node(int totalNodes, int port, String[] hostNames, int nodeID, boolean recovery) {
-		this.log = new ArrayList<LogEntry>();
-		this.logName = "appointments.log";
-		this.stateLog = "nodestate.txt";
-		this.nodeId = nodeID;
-		this.numNodes = totalNodes;
 		this.port = port;
 		this.hostNames = new ArrayList<String>();
 		for (int i = 0; i<hostNames.length; i++){
 			this.hostNames.add(hostNames[i]);
 		}
-		this.maxPrepare = 0;
-		this.logPos = 0;
-		this.m = nodeID;  
+		this.nodeId = nodeID;
+		this.numNodes = totalNodes;
+		this.stateLog = "nodestate.txt";
 		this.incAmt = totalNodes;
-		this.newEntry = null;
 		this.stillUpdating = true;
-		this.entryQueue = new PriorityBlockingQueue<LogEntry>(); // orders based on log position
 		
-		this.calendars = new int[totalNodes][7][48];
-		this.currentAppts = new HashSet<Appointment>();  // keep appointments from most recent log entry
+		this.maxPrepare = 0;
+		this.accNum = -1;
+		this.accVal = null;
+		this.m = nodeID;
+		this.log = new ArrayList<LogEntry>();
+		this.logPos = 0;
+		this.newEntry = null;
+		this.entryQueue = new PriorityBlockingQueue<LogEntry>(); // orders based on log position
 		
 		this.responseVals = new LogEntry[this.numNodes];
 		this.responseNums = new int[this.numNodes];
@@ -79,6 +77,9 @@ public class Node {
 		for (int i = 0; i < this.ackRespNums.length; i++){
 			this.ackRespNums[i] = -1;
 		}
+		
+		this.calendars = new int[totalNodes][7][48];
+		this.currentAppts = new HashSet<Appointment>();  // keep appointments from most recent log entry
 		
 		// recover node state if this is restarting from crash
 		if (recovery)
@@ -309,41 +310,16 @@ public class Node {
 	 *  save state of system for recovering from crash
 	 */
 	public void saveNodeState(){
-		// TODO update this for saving necessary information in case of node crash
+		// update this for saving necessary information in case of node crash
 		try{
 			FileWriter fw = new FileWriter("nodestate.txt", false);  // overwrite each time
 			BufferedWriter bw = new BufferedWriter(fw);
 			
-			// then save the 2D calendar array for each node
-			synchronized(lock){
-				for (int i = 0; i < this.calendars.length; i++){
-					for (int j = 0; j < this.calendars[i].length; j++){
-						for (int k = 0; k < this.calendars[i][j].length; k++){
-							bw.write(Integer.toString(this.calendars[i][j][k]));
-							if (k != this.calendars[i][j].length - 1)
-								bw.write(",");
-						}
-						bw.write("\n");
-					}
-				}
-			}
+			bw.write(this.m + "\n");
 			
-			// save events in NP, PL, NE, currentAppts in following format:
-			// operation, time, nodeID, appt name, day, start, end, sAMPM, eAMPM, apptID, participants
-			// for days, use ordinals of enums,
-			synchronized(lock){
-				
-				bw.write("current," + currentAppts.size() + "\n");
-				for (Appointment appt:currentAppts){
-					bw.write(appt.getName() + "," + appt.getDay().ordinal() + "," + appt.getStart() + "," + appt.getEnd() + "," + appt.getsAMPM() + "," + appt.geteAMPM() + ","
-							+ appt.getApptID() + ",");
-					for (int i = 0; i < appt.getParticipants().size(); i++){
-						bw.write(Integer.toString(appt.getParticipants().get(i)));
-						if (i != appt.getParticipants().size() - 1)
-							bw.write(",");
-					}
-					bw.write("\n");
-				}
+			// save log
+			for (LogEntry e:this.log){
+				bw.write(e.toString());
 			}
 			bw.close();
 		}
@@ -356,86 +332,19 @@ public class Node {
 	 *  recover from node failure
 	 */
 	public void restoreNodeState(){
-		// TODO update once saveNodeState() is correct for Paxos implementation
+		// TODO finish this function
 		BufferedReader reader = null;
 		try {
 			reader = new BufferedReader(new FileReader(this.stateLog));
 			String text = null;
 			int lineNo = 0;
-			int cal = 0;
-			int index = 0;
-			int tLimit = 7*numNodes + numNodes;
-			int npLimit = 0, plLimit = 0, neLimit = 0, apptLimit = 0;
-			int numNP = 0, numNE = 0, numPL = 0, numAppt = 0;
 		    while ((text = reader.readLine()) != null) {
 		    	String[] parts = text.split(",");
 		        if (lineNo == 0){ // restore node clock
-
-		        	Appointment.setApptNo(Integer.parseInt(parts[1]));
-		        }
-		        else if (lineNo > 0 && lineNo <= 7*numNodes ){ // restore calendar
-		        		int len = parts.length;
-			        	for (int j = 0; j < len; j++){
-			        		this.calendars[cal][index][j] = Integer.parseInt(parts[j]);
-			        	}
-		        	index++;
-		        	if (lineNo % 7 == 0){// time to go to next node's calendar
-		        		cal++;
-		        		index = 0;
-		        	}
-		        }
-		        else if (lineNo > 7*numNodes && lineNo <= tLimit){ // restore T
-		        	
-		        	index++;
-		        }
-		        else if (lineNo == tLimit + 1){ 
-		        	numNP = Integer.parseInt(parts[1]);
-		        	npLimit = lineNo + numNP;
-		        }
-		        else if (lineNo > tLimit + 1 && lineNo <= npLimit && numNP > 0){ // Restore NP's hashset
-		        	ArrayList<Integer> list = new ArrayList<Integer>();
-		        	for (int i = 10; i < parts.length; i++)
-		        		list.add(Integer.parseInt(parts[i]));
-		        	Appointment appt = new Appointment(parts[3], Day.values()[Integer.parseInt(parts[4])], Integer.parseInt(parts[5]), Integer.parseInt(parts[6]), 
-		        			parts[7], parts[8], parts[9], list, this.nodeId);
-		        	
+		        	this.m = Integer.parseInt(parts[0]);
 		        	
 		        }
-		        else if (lineNo == npLimit + 1){
-		        	numPL = Integer.parseInt(parts[1]);
-		        	plLimit = lineNo + numPL;
-		        }
-		        else if (lineNo > npLimit + 1 && lineNo <= plLimit && numPL > 0){ // Restore PL's hashset
-		        	ArrayList<Integer> list = new ArrayList<Integer>();
-		        	for (int i = 10; i < parts.length; i++)
-		        		list.add(Integer.parseInt(parts[i]));
-		        	Appointment appt = new Appointment(parts[3], Day.values()[Integer.parseInt(parts[4])], Integer.parseInt(parts[5]), Integer.parseInt(parts[6]), 
-		        			parts[7], parts[8], parts[9], list, this.nodeId);
-		        	
-		        }
-		        else if (lineNo == plLimit + 1){
-		        	numNE = Integer.parseInt(parts[1]);
-		        	neLimit = lineNo + numNE;
-		        }
-		        else if (lineNo > plLimit + 1 && lineNo <=  neLimit && numNE > 0){ // restore NE's hashset
-		        	ArrayList<Integer> list = new ArrayList<Integer>();
-		        	for (int i = 10; i < parts.length; i++)
-		        		list.add(Integer.parseInt(parts[i]));
-		        	Appointment appt = new Appointment(parts[3], Day.values()[Integer.parseInt(parts[4])], Integer.parseInt(parts[5]), Integer.parseInt(parts[6]), 
-		        			parts[7], parts[8], parts[9], list, this.nodeId);
-		        	
-		        }
-		        else if (lineNo == neLimit + 1){
-		        	numAppt = Integer.parseInt(parts[1]);
-		        	apptLimit = lineNo + numAppt;
-		        }
-		        else if (lineNo > neLimit + 1 && lineNo <= apptLimit && numAppt > 0){ // restore currentAppt hashset
-		        	ArrayList<Integer> list = new ArrayList<Integer>();
-		        	for (int i = 7; i < parts.length; i++)
-		        		list.add(Integer.parseInt(parts[i]));
-		        	Appointment appt = new Appointment(parts[0], Day.values()[Integer.parseInt(parts[1])], Integer.parseInt(parts[2]), Integer.parseInt(parts[3]), 
-		        			parts[4], parts[5], parts[6], list, this.nodeId);
-		        	currentAppts.add(appt);
+		        else{ 
 		        }
 		        lineNo++;
 		    }
@@ -710,7 +619,7 @@ public class Node {
 		
 	}
 	
-	/**
+	/** TODO needs to be called when leader is selected!
 	 * leader should use this at beginning or whenever a new leader is selected
 	 * to get all log entries
 	 * 
@@ -855,7 +764,11 @@ public class Node {
 				stillUpdating = false;
 				// choose my own value to send
 				// TODO probably need to pull this off of a queue
-				v = this.newEntry;
+				if (!entryQueue.isEmpty())
+					v = entryQueue.poll();
+				else // I think this shouldn't happen 
+					// or maybe it means that a new leader selected, it's done updating, but no one has requested a new log entry?
+					System.out.println("SOMETHING'S WRONG: no log entry available");
 			}
 			else if (stillUpdating && !allNull){
 				v = this.responseVals[index];

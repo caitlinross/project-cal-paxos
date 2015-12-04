@@ -80,6 +80,18 @@ public class LogEntry implements Serializable, Comparable<LogEntry> {
 	public void setOwner(int owner) {
 		this.owner = owner;
 	}
+	/* (non-Javadoc)
+	 * @see java.lang.Object#toString()
+	 */
+	@Override
+	public String toString() {
+		String str = "LogEntry [logPos=" + logPos + ", unknown=" + unknown + ", owner=" + owner + "\nappts:]\n";
+		for (Appointment a:this.appts){
+			str += a.toString() + "\n";
+		}
+		return str;
+	}
+	
 	
 	
 
