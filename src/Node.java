@@ -4,6 +4,7 @@
  * Node object
  */
 import java.util.*;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.net.*;
 import java.io.*;
 
@@ -26,6 +27,7 @@ public class Node {
 	private ArrayList<LogEntry> log; // store log entries in order
 	private int logPos; // which log position to work on
 	private LogEntry newEntry; // entry to try to add 
+	private Queue<LogEntry> entryQueue;
 	
 	// keeping track of promise and ack responses
 	private LogEntry[] responseVals;
@@ -62,6 +64,7 @@ public class Node {
 		this.incAmt = totalNodes;
 		this.newEntry = null;
 		this.stillUpdating = true;
+		this.entryQueue = new PriorityBlockingQueue<LogEntry>(); // orders based on log position
 		
 		this.calendars = new int[totalNodes][7][48];
 		this.currentAppts = new HashSet<Appointment>();  // keep appointments from most recent log entry
@@ -147,6 +150,7 @@ public class Node {
 		Appointment newAppt = null;
 		int startIndex = Appointment.convertTime(start, sAMPM);
 		int endIndex = Appointment.convertTime(end, eAMPM);
+		LogEntry newEntry = null;
 		
 		// check calendar
 		boolean timeAvail = true;
@@ -176,19 +180,33 @@ public class Node {
 			newAppt = new Appointment(name, day, start, end, sAMPM, eAMPM, nodes, this.nodeId);
 			// create new log entry with this appt to try to submit
 			int logPos = log.size();
-			this.newEntry = createLogEntry(newAppt, logPos);
+			newEntry = createLogEntry(newAppt, logPos, this.nodeId);
 		}
 		
 		// need to send new LogEntry to leader
-		if (newAppt != null && this.nodeId != this.leaderId){
+		if (newEntry != null && this.nodeId != this.leaderId){
 			// increase proposal id before sending
 			this.m += this.incAmt;
-			sendProposal(this.newEntry);
+			sendProposal(newEntry);
 		}
-		else if (newAppt != null && this.nodeId == this.leaderId){
+		else if (newEntry != null && this.nodeId == this.leaderId){
 			// handling for when leader wants to propose a new log entry
-			this.logPos = this.newEntry.getLogPos();
-			startPaxos(this.logPos);
+			this.logPos = newEntry.getLogPos();
+			if (stillUpdating){
+				// push this onto queue
+				entryQueue.offer(newEntry);
+			}
+			else{
+				// can start with accept phase because we're up to date on log
+				this.m += this.incAmt;
+				if (entryQueue.isEmpty()){
+					startPaxos(newEntry);
+				}
+				else{
+					entryQueue.offer(newEntry);
+					startPaxos(entryQueue.poll());
+				}
+			}
 		}
 		else // newAppt == null, appt conflicts with current calendar
 		{
@@ -204,8 +222,8 @@ public class Node {
 	 * @param logPos position for this new log entry
 	 * @return the new log entry
 	 */
-	public LogEntry createLogEntry(Appointment newAppt, int logPos){
-		LogEntry e = new LogEntry(logPos);
+	public LogEntry createLogEntry(Appointment newAppt, int logPos, int owner){
+		LogEntry e = new LogEntry(logPos, owner);
 		for (Appointment appt:currentAppts){
 			e.addAppt(appt);
 		}
@@ -495,7 +513,12 @@ public class Node {
 			if (msg.equals(MessageType.PROPOSE)){
 				senderId = objectInput.readInt();
 				entry = (LogEntry) objectInput.readObject();
-				checkProposal(senderId, entry);
+				if (entryQueue.isEmpty())
+					checkProposal(entry);
+				else {
+					entryQueue.offer(entry);
+					checkProposal(entryQueue.poll());
+				}
 			}
 			else if (msg.equals(MessageType.CONFLICT)){
 				// node received conflict message from the leader
@@ -516,9 +539,10 @@ public class Node {
 		
 	}
 	
-	public void checkProposal(int senderId, LogEntry newEntry){
+	public void checkProposal(LogEntry newEntry){
 		// check if this log entry is feasible 
 		// save newEntry's appts into a temp set
+		int senderId = newEntry.getOwner();
 		HashSet<Appointment> tmpSet = new HashSet<Appointment>();
 		for (Appointment a:newEntry.getAppts()){
 			tmpSet.add(a);
@@ -574,11 +598,12 @@ public class Node {
 			if (!this.log.get(this.log.size()-1).isUnknown()) // make sure that leader actually has this log entry's info
 				sendConflictMsg(senderId, this.log.get(this.log.size()-1)); 
 			else  // for some reason, leader doesn't have info, shouldn't happen
-				System.out.println("SOMETHING'S WRONG! leader doesn't have most up to date");
+				System.out.println("SOMETHING'S WRONG! leader doesn't have most up to date calendar");
 		}
 		else {
-			// TODO start paxos
-			//startPaxos();
+			// start Paxos from the accept phase
+			this.m += this.incAmt;
+			startPaxos(newEntry);
 		}
 		
 	}
@@ -694,6 +719,7 @@ public class Node {
 		for (LogEntry entry:log){
 			if (entry.isUnknown()){ // need to get information about this entry
 				// kick-off synod alg for each log position that the leader doesn't have info for
+				this.m += this.incAmt;
 				startPaxos(entry.getLogPos()); 
 			}
 			
@@ -703,15 +729,16 @@ public class Node {
 		// execute synod algorithm to see if this is true
 		// will know for certain after receiving enough promise msgs
 		this.logPos = this.log.size();
+		this.m += this.incAmt;
 		startPaxos(this.logPos);
 	}
 	
 	/**
-	 * increment m and send new prepare msg to all other nodes
+	 * send new prepare msg to all other nodes
+	 * full paxos, to allow for updates to log for new leaders
+	 * @param logPos the position to get info for
 	 */
-	public void startPaxos(int LogPos){
-		// increase proposal id
-		this.m += this.incAmt;
+	public void startPaxos(int logPos){
 		try{
 			// put m into byte array
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -729,6 +756,35 @@ public class Node {
 				}
 			}
 		
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	/**
+	 * this method should be used when the leader is up to date on the whole log
+	 * this is optimization to only do accept-ack-commit phase
+	 * @param v
+	 */
+	public void startPaxos(LogEntry v){
+		// send accept message
+		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+		ObjectOutputStream os;
+		try {
+			os = new ObjectOutputStream(outputStream);
+			os.writeInt(MessageType.ACCEPT.ordinal());
+			os.writeInt(m);
+			os.writeObject(v);
+			os.flush();
+			byte[] data = outputStream.toByteArray();
+			// send reply with m and v
+			for (int i = 0; i < this.numNodes; i++){
+				if (this.nodeId != i) {
+					System.out.println("Sending ACCEPT msg to node " + i);
+					sendPacket(i, data);
+				}
+			}
+			
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -781,7 +837,7 @@ public class Node {
 		if (totalRecd > (this.numNodes-1)/2){ // has received a majority of responses
 			int maxNum = 0;
 			int index = -1;
-			LogEntry v;
+			LogEntry v = null;
 			boolean allNull = true;
 			
 			for (int i = 0; i < this.responseVals.length; i++){
@@ -795,12 +851,18 @@ public class Node {
 					index = i;
 				}
 			}
-			if (stillUpdating && allNull){
-				this.stillUpdating = false;
+			if (allNull){ // no value has been accepted for this log entry
+				stillUpdating = false;
 				// choose my own value to send
+				// TODO probably need to pull this off of a queue
 				v = this.newEntry;
 			}
-			else{
+			else if (stillUpdating && !allNull){
+				v = this.responseVals[index];
+			}
+			else{ // not still updating after leader election, but at least 1 node has proposed value
+				// not sure if this condition is possible
+				// TODO figure this out; is this correct
 				v = this.responseVals[index];
 			}
 			

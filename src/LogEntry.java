@@ -11,18 +11,20 @@ import java.util.Set;
  * TODO add more functionality as necessary?
  */
 @SuppressWarnings("serial")
-public class LogEntry implements Serializable {
+public class LogEntry implements Serializable, Comparable<LogEntry> {
 
 	private Set<Appointment> appts;
 	private int logPos;
 	private boolean unknown; 
+	private int owner;
 	/**
 	 * @param logPosition the position in the log for this entry
 	 */
-	public LogEntry(int logPos) {
+	public LogEntry(int logPos, int owner) {
 		this.appts = new HashSet<Appointment>();
 		this.setLogPos(logPos);
 		this.setUnknown(true);
+		this.setOwner(owner);
 	}
 	/**
 	 * @return the logPos
@@ -56,5 +58,29 @@ public class LogEntry implements Serializable {
 	public Set<Appointment> getAppts(){
 		return appts;
 	}
+	
+	@Override
+	public int compareTo(LogEntry o) {
+		if (this.logPos == o.logPos)
+			return 0;
+		else if (this.logPos > o.logPos)
+			return 1;
+		else
+			return -1;
+	}
+	/**
+	 * @return the owner
+	 */
+	public int getOwner() {
+		return owner;
+	}
+	/**
+	 * @param owner the owner to set
+	 */
+	public void setOwner(int owner) {
+		this.owner = owner;
+	}
+	
+	
 
 }
