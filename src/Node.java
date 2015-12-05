@@ -347,7 +347,7 @@ public class Node {
 					try {
 						Set<Appointment> appts = (Set<Appointment>) objectInput.readObject();
 						if (proposerId != nodeId) {
-							send(proposerId, 4, cal, appts);
+							sendCalendar(proposerId, 4, cal, appts);
 							//this should never be accessed
 							//but if by some freak chance a node sends a cal to the wrong person
 							//that other node should helpfully pass it on to the correct leader
