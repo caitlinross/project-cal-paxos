@@ -754,7 +754,8 @@ public class Node {
 	public void sendPacket(int sendTo, byte[] data){
 		try{
 			DatagramSocket socket = new DatagramSocket();
-			InetAddress address = InetAddress.getByName(this.hostNames.get(sendTo));  // TODO might need to change for using on AWS (i.e. just use IP address)
+			byte[] ipaddr = this.hostNames.get(sendTo).getBytes();
+			InetAddress address = InetAddress.getByAddress(ipaddr); 
 			DatagramPacket packet = new DatagramPacket(data, data.length, address, this.port);
 			socket.send(packet);
 			socket.close();
