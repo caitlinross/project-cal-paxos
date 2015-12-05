@@ -4,6 +4,7 @@
  * Node object
  */
 import java.util.*;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.net.*;
 import java.io.*;
 
@@ -12,8 +13,10 @@ public class Node {
 	private ArrayList<String> hostNames;
 	private int nodeId;
 	private int numNodes; 
-	private String logName;
 	private String stateLog;
+	private int leaderId;
+	private int incAmt; // amount to increment m (proposal numbers) by to have unique numbers
+	private boolean stillUpdating;
 	
 	//leader election vars
 	private int proposerId;
@@ -25,8 +28,10 @@ public class Node {
 	private int accNum;
 	private LogEntry accVal;
 	private int m;
-	private ArrayList<LogEntry> log;
-	private int logPos;
+	private ArrayList<LogEntry> log; // store log entries in order
+	private int logPos; // which log position to work on
+	private LogEntry newEntry; // entry to try to add 
+	private Queue<LogEntry> entryQueue;
 	
 	// keeping track of promise and ack responses
 	private LogEntry[] responseVals;
@@ -47,33 +52,27 @@ public class Node {
 	 * @param recovery is this a recovery startup?	
 	 */
 	public Node(int totalNodes, int port, String[] hostNames, int nodeID, boolean recovery) {
-		this.log = new ArrayList<LogEntry>();
-		this.logName = "appointments.log";
-		this.stateLog = "nodestate.txt";
-		this.nodeId = nodeID;
-		this.numNodes = totalNodes;
 		this.port = port;
 		this.hostNames = new ArrayList<String>();
 		for (int i = 0; i<hostNames.length; i++){
 			this.hostNames.add(hostNames[i]);
 		}
+		this.nodeId = nodeID;
+		this.numNodes = totalNodes;
+		this.stateLog = "nodestate.txt";
+		this.incAmt = totalNodes;
+		this.stillUpdating = false; //TODO make sure to set appropriately when chosen as leader
+		
 		this.maxPrepare = 0;
+		this.accNum = -1;
+		this.accVal = null;
+		this.m = nodeID;
+		this.log = new ArrayList<LogEntry>();
 		this.logPos = 0;
-		
-		//default: all nodes running, proposer is highest id
-		//TODO: should we save who the proposer is when we crash? or 
-		//do we automatically assume 4 is the proposer for each 
-		//recovered process and if not do an election? 
-		this.proposerId = this.numNodes-1;
-		if (nodeId == numNodes-1) {
-			isProposer = true;
-		}
-		else {
-			isProposer = false;
-		}
-		
-		this.calendars = new int[totalNodes][7][48];
-		this.currentAppts = new HashSet<Appointment>();  // keep appointments from most recent log entry
+
+		this.newEntry = null;
+		this.entryQueue = new PriorityBlockingQueue<LogEntry>(); // orders based on log position
+
 		
 		this.responseVals = new LogEntry[this.numNodes];
 		this.responseNums = new int[this.numNodes];
@@ -86,9 +85,30 @@ public class Node {
 			this.ackRespNums[i] = -1;
 		}
 		
+
+		this.calendars = new int[totalNodes][7][48];
+		this.currentAppts = new HashSet<Appointment>();  // keep appointments from most recent log entry
+		
+		//default: all nodes running, proposer is highest id
+		//TODO: should we save who the proposer is when we crash? or 
+		//do we automatically assume 4 is the proposer for each 
+		//recovered process and if not do an election? 
+		this.proposerId = this.numNodes-1;
+		if (nodeId == numNodes-1) {
+			isProposer = true;
+		}
+		else {
+			isProposer = false;
+		}
+
 		// recover node state if this is restarting from crash
-		if (recovery)
+		if (recovery){
 			restoreNodeState();
+			updateCalendars(log.get(log.size()-1));
+		}
+		
+		// TODO remove this once leader election is added; just used to test Paxos without leader election and crashes
+		this.leaderId = 0;
 		
 	}
 
@@ -106,7 +126,40 @@ public class Node {
 		return calendars;
 	}
 	
-	/** 
+	/**
+	 * update calendars and currentAppts based on given log entry
+	 * @param e LogEntry to use for updates
+	 */
+	public void updateCalendars(LogEntry e){
+		// clear out currentAppts and calendars
+		currentAppts.clear();
+		for (int i=0; i < calendars.length; i++){
+			for (int j=0; j < calendars[i].length; j++){
+				for (int k=0; k<calendars[i][j].length; k++){
+					calendars[i][j][k] = 0;
+				}
+			}
+		}
+
+		// update based on given log entry
+		for (Appointment a:e.getAppts()){
+			currentAppts.add(a);
+			int time = a.getStartIndex();
+			int endIndex = a.getEndIndex();
+			while(time < endIndex){
+				for(Integer node:a.getParticipants()){
+					this.calendars[node][a.getDay().ordinal()][time] = 1;
+				}
+				time++;
+			}
+		}
+		
+	}
+
+	
+	/** creates a new appointment from the given info
+	 * if this node is leader, check for calendar conflict; if none start paxos
+	 * if node != leader, send to leader who will check for conflict 
 	 * 
 	 * @param nodes participants in the new appointment
 	 * @param name name of appointment
@@ -120,6 +173,7 @@ public class Node {
 		Appointment newAppt = null;
 		int startIndex = Appointment.convertTime(start, sAMPM);
 		int endIndex = Appointment.convertTime(end, eAMPM);
+		LogEntry newEntry = null;
 		
 		/*get calendar value and currentAppt list from last logEntry in log, 
 		*if log is empty, calendar is all zeros  and apptList is empty by default
@@ -158,22 +212,47 @@ public class Node {
 				time++;
 			}
 			newAppt = new Appointment(name, day, start, end, sAMPM, eAMPM, nodes, this.nodeId);
-			currentAppts.add(newAppt);
+			// create new log entry with this appt to try to submit
+			int logPos = log.size();
+			newEntry = createLogEntry(newAppt, logPos, this.nodeId);
+			//currentAppts.add(newAppt); // TODO don't think this is needed
+		}		
 		
+		// need to send new LogEntry to leader
+		if (newEntry != null && this.nodeId != this.leaderId){
+			// increase proposal id before sending
+			this.m += this.incAmt;
+			saveNodeState();
+			sendProposal(newEntry);
 		}
-		//update calendar so time slots used by new appointment are set to 1s
-		time = startIndex;
-		while(timeAvail && time < endIndex){
-			for (Integer node:nodes){
-				synchronized(lock){
-					this.calendars[node][day.ordinal()][time] = 1;
-					
+		else if (newEntry != null && this.nodeId == this.leaderId){
+			// handling for when leader wants to propose a new log entry
+			this.logPos = newEntry.getLogPos();
+			if (stillUpdating){
+				// push this onto queue
+				entryQueue.offer(newEntry);
+			}
+			else{
+				// can start with accept phase because we're up to date on log
+				this.m += this.incAmt;
+				saveNodeState();
+				if (entryQueue.isEmpty()){
+					startPaxos(newEntry);
+				}
+				else{
+					entryQueue.offer(newEntry);
+					startPaxos(entryQueue.poll());
 				}
 			}
 			time++;
 		}
+		else // newAppt == null, appt conflicts with current calendar
+		{
+			System.out.println("This appointment conflicts!");
+		}
 		
-		// send message to distinguished proposer, unless self is proposer
+		// TODO reconcile this block with the previous if/else block
+		/*// send message to distinguished proposer, unless self is proposer
 		if (proposerId != nodeId ) {
 			int success = -1;
 			success = sendCalendar(proposerId, 4, calendars, currentAppts);
@@ -184,11 +263,28 @@ public class Node {
 		}
 		else {
 			//run paxos
-		}
+		}*/
 		
 
 	}
 	
+	/**
+	 * create new log entry from currentAppts and the newly created appt
+	 * @param newAppt newly create appt
+	 * @param logPos position for this new log entry
+	 * @return the new log entry
+	 */
+	public LogEntry createLogEntry(Appointment newAppt, int logPos, int owner){
+		LogEntry e = new LogEntry(logPos, owner);
+		for (Appointment appt:currentAppts){
+			e.addAppt(appt);
+		}
+		e.setUnknown(false);
+		e.addAppt(newAppt);
+		return e;
+	}
+	
+
 	/** TODO needs to be updated for Paxos
 	 *  deletes appointment based on given appointment ID
 	 * @param apptID id for the appointment to be deleted
@@ -221,12 +317,12 @@ public class Node {
 				// send message to distinguished proposer, unless self is proposer
 				if (proposerId != nodeId ) {
 					int success = -1;
-					success = sendCalendar(proposerId, 4, calendars, currentAppts);
+					//success = sendCalendar(proposerId, 4, calendars, currentAppts);
 
 					//leader is down, run leader election and try again
 					if (success != 1) {
 						election();
-						sendCalendar(proposerId, 4, calendars, currentAppts);
+						//sendCalendar(proposerId, 4, calendars, currentAppts);
 					}
 				}
 				else {
@@ -251,7 +347,7 @@ public class Node {
 			if (i > nodeId){
 				//send 'election' to all nodes with higher ids
 				//success = 1 if message sent, 0 if other node is down
-				send(i, 1);
+				send(i, MessageType.ELECTION);
 				//i think this is unnecessary, but hanging on to for now just is case
 				//tally number of successful messages sent
 				//successSum += success;
@@ -273,14 +369,13 @@ public class Node {
 	 *  sends 'Election' and sender id to node k
 	 * @param k node to send to
 	 */
-	public int send(final int k, int msgType){
+	public int send(final int k, MessageType msgType){
 
 		try {
 			Socket socket = new Socket(hostNames.get(k), port);
 			OutputStream out = socket.getOutputStream();
 			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
-			objectOutput.writeInt(0);  // 0 means sending set of events
-			objectOutput.writeInt(msgType); //1 - election, 2 - ok, 3 - coordinator
+			objectOutput.writeInt(msgType.ordinal()); //1 - election, 2 - ok, 3 - coordinator
 			objectOutput.writeInt(nodeId);
 			objectOutput.close();
 			out.close();
@@ -298,7 +393,8 @@ public class Node {
            
 	}
 	
-	public int sendCalendar(final int k, int msgType, int[][][] cal, Set<Appointment> appts){
+	// TODO probably delete?
+	/*public int sendCalendar(final int k, int msgType, int[][][] cal, Set<Appointment> appts){
 
 		try {
 			Socket socket = new Socket(hostNames.get(k), port);
@@ -323,73 +419,8 @@ public class Node {
 			return 0;
 		}
            
-	}
+	}*/
 	
-	/**
-	 *  receives election info
-	 * @param clientSocket socket connection to receiving node
-	 */
-	public void receive(Socket clientSocket){
-		int k = -1;
-		int type = -1;
-		int sender = -1;
-		try {
-			// get the objects from the message
-			InputStream in = clientSocket.getInputStream();
-			ObjectInputStream objectInput = new ObjectInputStream(in);
-			k = objectInput.readInt();
-			type = objectInput.readInt();
-			sender = objectInput.readInt();	
-			if (type == 4) {
-				//receiving calendar from sender
-				try {
-					int[][][] cal = (int[][][]) objectInput.readObject();
-					try {
-						Set<Appointment> appts = (Set<Appointment>) objectInput.readObject();
-						if (proposerId != nodeId) {
-							sendCalendar(proposerId, 4, cal, appts);
-							//this should never be accessed
-							//but if by some freak chance a node sends a cal to the wrong person
-							//that other node should helpfully pass it on to the correct leader
-						}
-						else {
-							//paxos(cal, appts)
-						}
-					
-					}
-					catch (ClassNotFoundException e){
-						e.printStackTrace();
-					}
-				}
-				catch (ClassNotFoundException e){
-					e.printStackTrace();
-				}
-				
-			}
-			//type will be 1 - election, 2 - ok, 3 - coordinator
-			//sender is node who sent it
-			objectInput.close();
-			
-			in.close();
-		} 
-		catch (IOException e) {
-			e.printStackTrace();
-		} 
-		//own id is higher than election initiator
-		if ((type == 1) && (nodeId > sender)) {
-			send(sender, 2);
-			election();
-		}
-		if (type == 2) { //'ok' message
-			
-			isProposer = false;
-		}
-		if (type == 3) {
-			//received coordinator msg - set sender to proposer
-			proposerId = sender;
-			isProposer = false;
-		}			
-	}
 	
 	
 	/**
@@ -428,82 +459,20 @@ public class Node {
 		}
 	}
 	
-	
-	/**
-	 *  write an event to the log
-	 * @param eR the event record to write to log
-	 */
-	public void writeToLog(){
-		// TODO probably delete this and only use saveNodeState() for saving necessary log info
-		/*try{
-			FileWriter fw = new FileWriter(this.logName, true);
-			BufferedWriter bw = new BufferedWriter(fw);
-			bw.write("------- new event record -------\n");
-			bw.write("Operation: " + eR.getOperation() + "\n");
-			bw.write("Node clock: " + eR.getTime() + "\n");
-			bw.write("Node Id: " + eR.getNodeId() + "\n");
-			bw.write("Appointment to be ");
-			if (eR.getOperation().equals("delete"))
-				bw.write("deleted from ");
-			else
-				bw.write("added to ");
-			bw.write("dictionary\n");
-			bw.write("Appointment name: " + eR.getAppointment().getName() + "\n");
-			bw.write("Appointment id: " + eR.getAppointment().getApptID() + "\n");
-			bw.write("Day: " + eR.getAppointment().getDay() + "\n");
-			bw.write("Start time: " + eR.getAppointment().getStart() + "\n");
-			bw.write("End time: " + eR.getAppointment().getEnd() + "\n");
-			bw.write("Participants: ");
-			for (Integer node:eR.getAppointment().getParticipants()){
-				bw.write(node + " ");
-			}
-			bw.write("\n");
-			bw.close();
-		}
-		catch (IOException e){
-			e.printStackTrace();
-		}*/
-	}
-	
 	/**
 	 *  save state of system for recovering from crash
 	 */
 	public void saveNodeState(){
-		// TODO update this for saving necessary information in case of node crash
+		// update this for saving necessary information in case of node crash
 		try{
 			FileWriter fw = new FileWriter("nodestate.txt", false);  // overwrite each time
 			BufferedWriter bw = new BufferedWriter(fw);
 			
-			// then save the 2D calendar array for each node
-			synchronized(lock){
-				for (int i = 0; i < this.calendars.length; i++){
-					for (int j = 0; j < this.calendars[i].length; j++){
-						for (int k = 0; k < this.calendars[i][j].length; k++){
-							bw.write(Integer.toString(this.calendars[i][j][k]));
-							if (k != this.calendars[i][j].length - 1)
-								bw.write(",");
-						}
-						bw.write("\n");
-					}
-				}
-			}
+			bw.write(this.m + "\n");
 			
-			// save events in NP, PL, NE, currentAppts in following format:
-			// operation, time, nodeID, appt name, day, start, end, sAMPM, eAMPM, apptID, participants
-			// for days, use ordinals of enums,
-			synchronized(lock){
-				
-				bw.write("current," + currentAppts.size() + "\n");
-				for (Appointment appt:currentAppts){
-					bw.write(appt.getName() + "," + appt.getDay().ordinal() + "," + appt.getStart() + "," + appt.getEnd() + "," + appt.getsAMPM() + "," + appt.geteAMPM() + ","
-							+ appt.getApptID() + ",");
-					for (int i = 0; i < appt.getParticipants().size(); i++){
-						bw.write(Integer.toString(appt.getParticipants().get(i)));
-						if (i != appt.getParticipants().size() - 1)
-							bw.write(",");
-					}
-					bw.write("\n");
-				}
+			// save log
+			for (LogEntry e:this.log){
+				bw.write(e.toString());
 			}
 			bw.close();
 		}
@@ -516,90 +485,35 @@ public class Node {
 	 *  recover from node failure
 	 */
 	public void restoreNodeState(){
-		// TODO update once saveNodeState() is correct for Paxos implementation
 		BufferedReader reader = null;
 		try {
 			reader = new BufferedReader(new FileReader(this.stateLog));
 			String text = null;
 			int lineNo = 0;
-			int cal = 0;
-			int index = 0;
-			int tLimit = 7*numNodes + numNodes;
-			int npLimit = 0, plLimit = 0, neLimit = 0, apptLimit = 0;
-			int numNP = 0, numNE = 0, numPL = 0, numAppt = 0;
+			LogEntry e = null;
 		    while ((text = reader.readLine()) != null) {
 		    	String[] parts = text.split(",");
 		        if (lineNo == 0){ // restore node clock
-
-		        	Appointment.setApptNo(Integer.parseInt(parts[1]));
+		        	this.m = Integer.parseInt(parts[0]);
+		        	
 		        }
-		        else if (lineNo > 0 && lineNo <= 7*numNodes ){ // restore calendar
-		        		int len = parts.length;
-			        	for (int j = 0; j < len; j++){
-			        		this.calendars[cal][index][j] = Integer.parseInt(parts[j]);
-			        	}
-		        	index++;
-		        	if (lineNo % 7 == 0){// time to go to next node's calendar
-		        		cal++;
-		        		index = 0;
+		        else{ 
+		        	if (text.startsWith("LogEntry")){
+		        		if (e != null){
+		        			// done adding appts for previous log entry
+		        			log.add(e); 
+		        		}
+		        		e = LogEntry.fromString(text);
 		        	}
-		        }
-		        else if (lineNo > 7*numNodes && lineNo <= tLimit){ // restore T
-		        	
-		        	index++;
-		        }
-		        else if (lineNo == tLimit + 1){ 
-		        	numNP = Integer.parseInt(parts[1]);
-		        	npLimit = lineNo + numNP;
-		        }
-		        else if (lineNo > tLimit + 1 && lineNo <= npLimit && numNP > 0){ // Restore NP's hashset
-		        	ArrayList<Integer> list = new ArrayList<Integer>();
-		        	for (int i = 10; i < parts.length; i++)
-		        		list.add(Integer.parseInt(parts[i]));
-		        	Appointment appt = new Appointment(parts[3], Day.values()[Integer.parseInt(parts[4])], Integer.parseInt(parts[5]), Integer.parseInt(parts[6]), 
-		        			parts[7], parts[8], parts[9], list, this.nodeId);
-		        	
-		        	
-		        }
-		        else if (lineNo == npLimit + 1){
-		        	numPL = Integer.parseInt(parts[1]);
-		        	plLimit = lineNo + numPL;
-		        }
-		        else if (lineNo > npLimit + 1 && lineNo <= plLimit && numPL > 0){ // Restore PL's hashset
-		        	ArrayList<Integer> list = new ArrayList<Integer>();
-		        	for (int i = 10; i < parts.length; i++)
-		        		list.add(Integer.parseInt(parts[i]));
-		        	Appointment appt = new Appointment(parts[3], Day.values()[Integer.parseInt(parts[4])], Integer.parseInt(parts[5]), Integer.parseInt(parts[6]), 
-		        			parts[7], parts[8], parts[9], list, this.nodeId);
-		        	
-		        }
-		        else if (lineNo == plLimit + 1){
-		        	numNE = Integer.parseInt(parts[1]);
-		        	neLimit = lineNo + numNE;
-		        }
-		        else if (lineNo > plLimit + 1 && lineNo <=  neLimit && numNE > 0){ // restore NE's hashset
-		        	ArrayList<Integer> list = new ArrayList<Integer>();
-		        	for (int i = 10; i < parts.length; i++)
-		        		list.add(Integer.parseInt(parts[i]));
-		        	Appointment appt = new Appointment(parts[3], Day.values()[Integer.parseInt(parts[4])], Integer.parseInt(parts[5]), Integer.parseInt(parts[6]), 
-		        			parts[7], parts[8], parts[9], list, this.nodeId);
-		        	
-		        }
-		        else if (lineNo == neLimit + 1){
-		        	numAppt = Integer.parseInt(parts[1]);
-		        	apptLimit = lineNo + numAppt;
-		        }
-		        else if (lineNo > neLimit + 1 && lineNo <= apptLimit && numAppt > 0){ // restore currentAppt hashset
-		        	ArrayList<Integer> list = new ArrayList<Integer>();
-		        	for (int i = 7; i < parts.length; i++)
-		        		list.add(Integer.parseInt(parts[i]));
-		        	Appointment appt = new Appointment(parts[0], Day.values()[Integer.parseInt(parts[1])], Integer.parseInt(parts[2]), Integer.parseInt(parts[3]), 
-		        			parts[4], parts[5], parts[6], list, this.nodeId);
-		        	currentAppts.add(appt);
+		        	else if (text.startsWith("Appointment")){
+		        		e.addAppt(Appointment.fromString(text));
+		        	}
+		        		
 		        }
 		        lineNo++;
 		    }
-		    reader.close();
+		    log.add(e); //add the last log entry to the log
+ 		    reader.close();
 		} catch (FileNotFoundException e2) {
 			e2.printStackTrace();
 		} catch (IOException e) {
@@ -607,28 +521,183 @@ public class Node {
 		}
 	}
 	
+	/**
+	 *  send proposed LogEntry to the distingushed proposer/leader
+	 *  @param entry log entry to be proposed
+	 */
+	public void sendProposal(LogEntry entry){
+		try {
+			Socket socket = new Socket(hostNames.get(this.leaderId), port);
+			OutputStream out = socket.getOutputStream();
+			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
+			objectOutput.writeInt(MessageType.PROPOSE.ordinal());  
+			objectOutput.writeInt(nodeId);
+			objectOutput.writeObject(entry); // entry should contain correct logPosition, so no need to send separately
+			objectOutput.close();
+			out.close();
+			socket.close();
+		} 
+		catch (IOException e) {
+			e.printStackTrace();
+		}
+        
+        
+	}
+
 	
-	public void sendCancellationMsg(String apptID, final int k){
-		// TODO maybe leader node uses something like this to tell another node that the appointment it wants to create has a conflict
-		// or should that be done by a UDP packet
-		//if (eR != null){
-			try {
-				Socket socket = new Socket(hostNames.get(k), port);
-				OutputStream out = socket.getOutputStream();
-				ObjectOutputStream objectOutput = new ObjectOutputStream(out);
-				synchronized(lock){
-					//objectOutput.writeObject(eR);
-					//objectOutput.writeObject(T);
+	/**
+	 *  receives TCP messages from other nodes
+	 * @param clientSocket socket connection to receiving node
+	 */
+	public void receive(Socket clientSocket){
+		// at the moment, TCP should only receive PROPOSE and CONFLICT messages
+		MessageType msg;
+		int senderId;
+		LogEntry entry = null;
+		try {
+			// get the objects from the message
+			InputStream in = clientSocket.getInputStream();
+			ObjectInputStream objectInput = new ObjectInputStream(in);
+			int tmp = objectInput.readInt();
+			msg = MessageType.values()[tmp];
+			if (msg.equals(MessageType.PROPOSE)){
+				senderId = objectInput.readInt();
+				entry = (LogEntry) objectInput.readObject();
+				if (entryQueue.isEmpty())
+					checkProposal(entry);
+				else {
+					entryQueue.offer(entry);
+					checkProposal(entryQueue.poll());
 				}
-				objectOutput.writeInt(nodeId);
-				objectOutput.close();
-				out.close();
-				socket.close();
-			} 
-			catch (IOException e) {
-				e.printStackTrace();
 			}
-		//}
+			else if (msg.equals(MessageType.CONFLICT)){
+				// node received conflict message from the leader
+				entry = (LogEntry) objectInput.readObject(); // this is most recent log entry
+				// add to log and update the calendars
+				this.log.add(entry.getLogPos(), entry);
+				saveNodeState();
+				updateCalendars(entry);
+				
+				// TODO report that appointment to be added has a conflict to user, or not;
+				// without it will update on the node and user will be able to view up to date calendar
+			}
+			else if (msg.equals(MessageType.ELECTION)){
+				int sender = objectInput.readInt();
+				if (nodeId > sender){
+					send(sender, MessageType.OK);
+					election();
+				}
+			}
+			else if (msg.equals(MessageType.OK)){
+				isProposer = false;
+			}
+			else if (msg.equals(MessageType.COORDINATOR)){
+				int sender = objectInput.readInt();
+				proposerId = sender;
+				isProposer = false;
+			}
+			
+			objectInput.close();
+			in.close();
+		} 
+		catch (IOException | ClassNotFoundException e) {
+			e.printStackTrace();
+		} 
+		
+	}
+	
+	public void checkProposal(LogEntry newEntry){
+		// check if this log entry is feasible 
+		// save newEntry's appts into a temp set
+		int senderId = newEntry.getOwner();
+		HashSet<Appointment> tmpSet = new HashSet<Appointment>();
+		for (Appointment a:newEntry.getAppts()){
+			tmpSet.add(a);
+		}
+		
+		// create a tmpCal for checking for conflicts
+		int[][][] tmpCal = new int[numNodes][7][48];
+		
+		// for each appt in currentAppts, if appt in tmpAppts, delete from tmpAppts
+		// else remember that this is a deleted appointment
+		for (Appointment a:currentAppts){
+			if (tmpSet.contains(a)){
+				// update tmp cal when a is in both sets
+				int time = a.getStartIndex();
+				int end = a.getEndIndex();
+				while (time < end){
+					for (Integer node:a.getParticipants()){
+						tmpCal[node][a.getDay().ordinal()][time] = 1;
+					}
+					time++;
+				}
+				tmpSet.remove(a);
+			}
+			else {// not in tmpSet, means this appointment has been deleted
+				// don't add to tmpCal
+				// TODO handle this appropriately
+			}
+		}
+		
+		// any remaining appts in tmpAppts are new and should be checked for conflicts
+		boolean conflict = false;
+		if (!tmpSet.isEmpty()){
+			for (Appointment a:tmpSet){
+				// check for conflicts against tmpCal
+				int time = a.getStartIndex();
+				int end = a.getEndIndex();
+				while (time < end){
+					for (Integer node:a.getParticipants()){
+						if (tmpCal[node][a.getDay().ordinal()][time] == 1){
+							conflict = true;
+							break;
+						}
+					}
+					
+				}
+				if (conflict)
+					break;
+			}
+		}
+		
+		if (conflict){
+			// send msg to node that there's a conflict
+			if (!this.log.get(this.log.size()-1).isUnknown()) // make sure that leader actually has this log entry's info
+				sendConflictMsg(senderId, this.log.get(this.log.size()-1)); 
+			else  // for some reason, leader doesn't have info, shouldn't happen
+				System.out.println("SOMETHING'S WRONG! leader doesn't have most up to date calendar");
+		}
+		else {
+			// start Paxos from the accept phase
+			this.m += this.incAmt;
+			saveNodeState();
+			startPaxos(newEntry);
+		}
+		
+	}
+	
+	/**
+	 * send conflict message to node k
+	 * @param k
+	 * @param entry 
+	 */
+	public void sendConflictMsg(int k, LogEntry entry){
+		// leader node uses this to notify node k that it's log entry conflicts/can't run it thru Paxos
+		try {
+			Socket socket = new Socket(hostNames.get(k), port);
+			OutputStream out = socket.getOutputStream();
+			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
+			objectOutput.writeInt(MessageType.CONFLICT.ordinal());
+			objectOutput.writeObject(entry);
+			objectOutput.close();
+			out.close();
+			socket.close();
+		} 
+		catch (IOException e) {
+			e.printStackTrace();
+		}
+		
+
 	}
 	
 	/*****  PAXOS specific functions below here *****/
@@ -638,22 +707,30 @@ public class Node {
 	 * @param packet UDP packet received from another node
 	 * @param socket the socket the packet was received from
 	 */
-	public void receivePacket(DatagramPacket packet, DatagramSocket socket){
+	public void receivePacket(DatagramPacket packet){
 		// TODO  probably need some sort of queue for handling messages for different log entry
 		// i.e. only work on one log entry at a time, keep track with this.logPos
+		
+		// TODO change this back when done testing on my personal computers
 		int senderId = -1;
-		if (this.hostNames.contains(packet.getAddress().toString())){
-			senderId = this.hostNames.indexOf(packet.getAddress().toString());
-		}
+		if (this.nodeId == 0)
+			senderId = 1;
+		else
+			senderId = 0;
+		//if (this.hostNames.contains(packet.getAddress().toString())){
+		//	senderId = this.hostNames.indexOf(packet.getAddress().toString());
+		//}
 
 		try {
 			ByteArrayInputStream byteStream = new ByteArrayInputStream(packet.getData());
 		    ObjectInputStream is = new ObjectInputStream(new BufferedInputStream(byteStream));
 		    int tmp = is.readInt();
 		    MessageType msg = MessageType.values()[tmp];
+		    System.out.println("Received " + msg + " msg from node " + senderId);
 		    if (msg.equals(MessageType.PREPARE)){
 		    	int m = is.readInt();
-		    	prepare(m, senderId);
+		    	int logPos = is.readInt();
+		    	prepare(m, logPos, senderId);
 		    }
 		    else if (msg.equals(MessageType.PROMISE)){
 		    	int accNum = is.readInt();
@@ -676,14 +753,12 @@ public class Node {
 		    }
 		    is.close();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		catch (ClassNotFoundException e){
 			
 		}
 	      
-		
 	}
 	
 	/**
@@ -704,12 +779,95 @@ public class Node {
 		
 	}
 	
+	/** TODO needs to be called when leader is selected!
+	 * leader should use this at beginning or whenever a new leader is selected
+	 * to get all log entries
+	 * 
+	 */
+	public void getUpdates(){
+		for (LogEntry entry:log){
+			if (entry.isUnknown()){ // need to get information about this entry
+				// kick-off synod alg for each log position that the leader doesn't have info for
+				this.m += this.incAmt;
+				saveNodeState();
+				startPaxos(entry.getLogPos()); 
+			}
+			
+		}
+		
+		// could be newer entries at end of log array that other nodes know about but not this one
+		// execute synod algorithm to see if this is true
+		// will know for certain after receiving enough promise msgs
+		this.logPos = this.log.size();
+		this.m += this.incAmt;
+		saveNodeState();
+		startPaxos(this.logPos);
+	}
+	
 	/**
-	 * received a prepare msg from another node
+	 * send new prepare msg to all other nodes
+	 * full paxos, to allow for updates to log for new leaders
+	 * @param logPos the position to get info for
+	 */
+	public void startPaxos(int logPos){
+		try{
+			// put m into byte array
+			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+			ObjectOutputStream os = new ObjectOutputStream(outputStream);
+			os.writeInt(MessageType.PREPARE.ordinal());
+			os.writeInt(this.m);
+			os.writeInt(logPos);
+			os.flush();
+			byte[] data = outputStream.toByteArray();
+			// send promise message to all other nodes
+			for (int i = 0; i < this.numNodes; i++){
+				if (this.nodeId != i) {
+					System.out.println("Sending PREPARE msg to node " + i);
+					sendPacket(i, data);
+				}
+			}
+		
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	/**
+	 * this method should be used when the leader is up to date on the whole log
+	 * this is optimization to only do accept-ack-commit phase
+	 * @param v
+	 */
+	public void startPaxos(LogEntry v){
+		// send accept message
+		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+		ObjectOutputStream os;
+		try {
+			os = new ObjectOutputStream(outputStream);
+			os.writeInt(MessageType.ACCEPT.ordinal());
+			os.writeInt(m);
+			os.writeObject(v);
+			os.flush();
+			byte[] data = outputStream.toByteArray();
+			// send reply with m and v
+			for (int i = 0; i < this.numNodes; i++){
+				if (this.nodeId != i) {
+					System.out.println("Sending ACCEPT msg to node " + i);
+					sendPacket(i, data);
+				}
+			}
+			
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	/**
+	 * received a prepare msg from proposer
 	 * @param m
 	 * @param logPos
+	 * @param senderId proposer's id num
 	 */
-	public void prepare(int m, int sender){
+	public void prepare(int m, int logPos, int senderId){
 		if (m > maxPrepare){
 			maxPrepare = m;
 			try{
@@ -719,22 +877,24 @@ public class Node {
 				os.writeInt(MessageType.PROMISE.ordinal());
 				os.writeInt(this.accNum);
 				os.writeObject(this.accVal);
+				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
-				sendPacket(sender, data);
+				System.out.println("Sending PROMISE msg to node " + senderId);
+				sendPacket(senderId, data);
 			
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}
 	}
 	
 	
-	/** received promise msg from another node
+	/** received promise msg from an acceptor node
 	 * 
 	 * @param accNum accepted proposal number
 	 * @param accVal accepted value
+	 * @param senderId acceptor's id num
 	 */
 	public void promise(int accNum, LogEntry accVal, int senderId){
 		this.responseVals[senderId] = accVal;
@@ -745,28 +905,40 @@ public class Node {
 				totalRecd++;
 			}
 		}
-		if (totalRecd > this.numNodes/2){ // has received a majority of responses
+		if (totalRecd > (this.numNodes-1)/2){ // has received a majority of responses
 			int maxNum = 0;
 			int index = -1;
-			LogEntry v;
+			LogEntry v = null;
 			boolean allNull = true;
-			for (int i = 0; i < this.responseNums.length; i++){
-				if (this.responseNums[i] != -1){
+			
+			for (int i = 0; i < this.responseVals.length; i++){
+				// check if all values are null
+				if (this.responseVals[i] != null){
 					allNull = false;
 				}
+				// find largest accNum to choose correct accVal
 				if (this.responseNums[i] > maxNum){
 					maxNum = this.responseNums[i];
 					index = i;
 				}
 			}
-			if (allNull){
+			if (allNull){ // no value has been accepted for this log entry
+				stillUpdating = false;
 				// choose my own value to send
-				//TODO may not be correct
-				v = this.accVal;
+				// TODO probably need to pull this off of a queue
+				if (!entryQueue.isEmpty())
+					v = entryQueue.poll();
+				else // I think this shouldn't happen 
+					// or maybe it means that a new leader selected, it's done updating, but no one has requested a new log entry?
+					System.out.println("SOMETHING'S WRONG: no log entry available");
 			}
-			else{
+			else if (stillUpdating && !allNull){
 				v = this.responseVals[index];
-		
+			}
+			else{ // not still updating after leader election, but at least 1 node has proposed value
+				// not sure if this condition is possible
+				// TODO figure this out; is this correct
+				v = this.responseVals[index];
 			}
 			
 			// send accept message
@@ -777,17 +949,29 @@ public class Node {
 				os.writeInt(MessageType.ACCEPT.ordinal());
 				os.writeInt(this.m);
 				os.writeObject(v);
+				os.flush();
 				byte[] data = outputStream.toByteArray();
-				// send reply with accNum, accVal
-				sendPacket(senderId, data);
+				// send reply with m and v
+				for (int i = 0; i < this.numNodes; i++){
+					if (this.nodeId != i) {
+						System.out.println("Sending ACCEPT msg to node " + i);
+						sendPacket(i, data);
+					}
+				}
+				
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 			
 		}
 	}
 	
+	/**
+	 * received accept msg from proposer
+	 * @param m proposal number
+	 * @param v LogEntry value
+	 * @param senderId propser's id number
+	 */
 	public void accept(int m, LogEntry v, int senderId){
 		if (m >= this.maxPrepare){
 			this.accNum = m;
@@ -801,16 +985,23 @@ public class Node {
 				os.writeInt(MessageType.ACK.ordinal());
 				os.writeInt(this.accNum);
 				os.writeObject(this.accVal);
+				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
+				System.out.println("Sending ACK msg to node " + senderId);
 				sendPacket(senderId, data);
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}
 	}
 	
+	/**
+	 * received ack msg from acceptor
+	 * @param accNum the proposal number that's been accepted
+	 * @param accVal the LogEntry that's been accepted
+	 * @param senderId acceptor's id num
+	 */
 	public void ack(int accNum, LogEntry accVal, int senderId){
 		this.ackRespVals[senderId] = accVal;
 		this.ackRespNums[senderId] = accNum;
@@ -821,29 +1012,14 @@ public class Node {
 				totalRecd++;
 			}
 		}
-		if (totalRecd > this.numNodes/2){ // has received a majority of responses
-			int maxNum = 0;
-			int index = -1;
-			LogEntry v;
-			boolean allNull = true;
-			for (int i = 0; i < this.ackRespNums.length; i++){
-				if (this.ackRespNums[i] != -1){
-					allNull = false;
-				}
-				if (this.ackRespNums[i] > maxNum){
-					maxNum = this.ackRespNums[i];
-					index = i;
-				}
-			}
-			if (allNull){
-				// choose my own value to send
-				//TODO may not be correct
-				v = this.accVal;
-			}
-			else{
-				v = this.ackRespVals[index];
-		
-			}
+		if (totalRecd > (this.numNodes-1)/2){ // has received a majority of responses
+			// at this point, all ack msgs received for this logPosition should have same accVal
+			LogEntry v = accVal;
+			
+			// update proposing node's calendars
+			this.log.add(v.getLogPos(), v);
+			updateCalendars(v);
+			saveNodeState();
 			
 			// send commit message
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -852,11 +1028,16 @@ public class Node {
 				os = new ObjectOutputStream(outputStream);
 				os.writeInt(MessageType.COMMIT.ordinal());
 				os.writeObject(v);
+				os.flush();
 				byte[] data = outputStream.toByteArray();
-				// send reply with accNum, accVal
-				sendPacket(senderId, data);
+				// send reply with v
+				for (int i = 0; i < this.numNodes; i++){
+					if (this.nodeId != i) {
+						System.out.println("Sending COMMIT msg to node " + i);
+						sendPacket(i, data);
+					}
+				}
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 			
@@ -864,13 +1045,15 @@ public class Node {
 	}
 	
 	/**
-	 * simply record v in the log
-	 * @param v
+	 * received commit from the proposer
+	 * @param v the log entry to be committed
 	 */
 	public void commit(LogEntry v){
 		this.log.add(v.getLogPos(), v);
-		
-		// TODO write to storage in case of crash
+		//  need to update currentAppts and calendar stuff based on this new entry
+		updateCalendars(v);
+		// write to storage in case of crash
+		saveNodeState();
 	}
 	
 }

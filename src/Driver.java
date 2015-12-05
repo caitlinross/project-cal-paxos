@@ -44,7 +44,7 @@ public class Driver {
 			e.printStackTrace();
 		}
 	    
-		final int port = 4445;
+		final int port = 4444;
 
 		
 		InetAddress inetAddr;
@@ -97,13 +97,12 @@ public class Driver {
 		        try {
 		        	socket = new DatagramSocket(port);
 		            while (true) {
-		            	byte[] buf = new byte[256];  // TODO change size to appropriate size later
+		            	byte[] buf = new byte[2000];  
 		            	final DatagramPacket packet = new DatagramPacket(buf, buf.length);
 		            	socket.receive(packet);
 		            	Runnable runnable = new Runnable() {
 		                    public synchronized void run() {
-		                        // TODO pass packet to node object
-		                    	node.receivePacket(packet, socket);
+		                    	node.receivePacket(packet);
 		                    }
 		                };
 		                new Thread(runnable).start();
@@ -201,6 +200,7 @@ public class Driver {
 				node.resetBadAppts();
 				node.setCantSched(false);
 			}*/
+
 		}
 	}
 	

@@ -207,4 +207,134 @@ public class Appointment implements Serializable, Comparable<Appointment> {
 		return index;
 	}
 	
+	/* (non-Javadoc)
+	 * @see java.lang.Object#hashCode()
+	 */
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ((apptID == null) ? 0 : apptID.hashCode());
+		result = prime * result + ((day == null) ? 0 : day.hashCode());
+		result = prime * result + ((eAMPM == null) ? 0 : eAMPM.hashCode());
+		result = prime * result + end;
+		result = prime * result + endIndex;
+		result = prime * result + initNode;
+		result = prime * result + ((name == null) ? 0 : name.hashCode());
+		result = prime * result + ((participants == null) ? 0 : participants.hashCode());
+		result = prime * result + ((sAMPM == null) ? 0 : sAMPM.hashCode());
+		result = prime * result + start;
+		result = prime * result + startIndex;
+		return result;
+	}
+
+	/* (non-Javadoc)
+	 * @see java.lang.Object#equals(java.lang.Object)
+	 */
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (!(obj instanceof Appointment))
+			return false;
+		Appointment other = (Appointment) obj;
+		if (apptID == null) {
+			if (other.apptID != null)
+				return false;
+		} else if (!apptID.equals(other.apptID))
+			return false;
+		if (day != other.day)
+			return false;
+		if (eAMPM == null) {
+			if (other.eAMPM != null)
+				return false;
+		} else if (!eAMPM.equals(other.eAMPM))
+			return false;
+		if (end != other.end)
+			return false;
+		if (endIndex != other.endIndex)
+			return false;
+		if (initNode != other.initNode)
+			return false;
+		if (name == null) {
+			if (other.name != null)
+				return false;
+		} else if (!name.equals(other.name))
+			return false;
+		if (participants == null) {
+			if (other.participants != null)
+				return false;
+		} else if (!participants.equals(other.participants))
+			return false;
+		if (sAMPM == null) {
+			if (other.sAMPM != null)
+				return false;
+		} else if (!sAMPM.equals(other.sAMPM))
+			return false;
+		if (start != other.start)
+			return false;
+		if (startIndex != other.startIndex)
+			return false;
+		return true;
+	}
+
+	/* (non-Javadoc)
+	 * @see java.lang.Object#toString()
+	 */
+	@Override
+	public String toString() {
+		return "Appointment {name=" + name + "; day=" + day.ordinal() + "; start=" + start + "; end=" + end + "; sAMPM=" + sAMPM
+				+ "; eAMPM=" + eAMPM + "; participants=" + participants.toString() + "; initNode=" + initNode + "; apptID="
+				+ apptID + "}";
+	}
+	
+	public static Appointment fromString(String str){
+		Appointment a = null;
+		String name = "";
+		Day day = Day.SUNDAY;
+		int start = -1;
+		int end = -1;
+		String sAMPM = "";
+		String eAMPM = "";
+		ArrayList<Integer> participants = new ArrayList<Integer>();
+		int initNode = -1;
+		String apptID = "";
+		
+		
+		String newStr = str.split("[{}]")[1]; 
+		String[] parts = newStr.split(";");
+		for (String s:parts){
+			String[] p = s.split("=");
+			if (p[0].trim().equals("name"))
+				name = p[1];
+			else if (p[0].trim().equals("day"))
+				day = Day.values()[Integer.parseInt(p[1])];
+			else if (p[0].trim().equals("start"))
+				start = Integer.parseInt(p[1]);
+			else if (p[0].trim().equals("end"))
+				end = Integer.parseInt(p[1]);
+			else if (p[0].trim().equals("sAMPM"))
+				sAMPM = p[1];
+			else if (p[0].trim().equals("eAMPM"))
+				eAMPM = p[1];
+			else if (p[0].trim().equals("participants")){
+				String pars = p[1].split("[\\[\\]]")[1];
+				String[] par = pars.split(",");
+				for (String st:par){
+					participants.add(Integer.parseInt(st.trim()));
+				}
+			}
+			else if (p[0].trim().equals("initNode"))
+				initNode = Integer.parseInt(p[1]);
+			else if (p[0].trim().equals("apptID"))
+				apptID = p[1];
+			
+				
+		}
+		a = new Appointment(name, day, start, end, sAMPM, eAMPM, apptID, participants, initNode);
+	
+		return a;
+	}
 }
