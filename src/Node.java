@@ -21,6 +21,7 @@ public class Node {
 	//leader election vars
 	private int proposerId;
 	private boolean isProposer;
+	private int numOks;
 	
 	
 	// Paxos vars
@@ -100,6 +101,7 @@ public class Node {
 		else {
 			isProposer = false;
 		}
+		this.numOks = 0;
 
 		// recover node state if this is restarting from crash
 		if (recovery){
@@ -337,29 +339,36 @@ public class Node {
 	 * elects new leader 
 	 */
 	public void election() {
-		//int success = -1;
-		//int successSum = 0;
+		int success = -1;
+		int successSum = 0;
 		
 		//assume self is leader until get an ok message from someone else
-		isProposer = true;
-		proposerId = nodeId;
+		//isProposer = true;
+		//proposerId = nodeId;
 		for (int i=0; i < numNodes; i++) {
 			if (i > nodeId){
 				//send 'election' to all nodes with higher ids
 				//success = 1 if message sent, 0 if other node is down
 				send(i, MessageType.ELECTION);
-				//i think this is unnecessary, but hanging on to for now just is case
+
 				//tally number of successful messages sent
-				//successSum += success;
+				successSum += success;
 				
 				
 			}
 		}
-//		if (successSum == 0) {\
-//			//all other nodes down, is leader by default;
-//			isProposer = true;
-//			proposerId = nodeId;
-//		}
+		if (successSum == 0) {
+			//all other nodes down, is leader by default;
+			isProposer = true;
+			proposerId = nodeId;
+			//notify everyone, even down nodes that self is new leader
+			for (int i=0; i<numNodes; i++) {
+				if (i != nodeId) {
+					send(i, MessageType.COORDINATOR);
+				}
+			}
+			
+		}
 		
 	}
 	
