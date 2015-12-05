@@ -245,7 +245,7 @@ public class Node {
 					startPaxos(entryQueue.poll());
 				}
 			}
-			time++;
+
 		}
 		else // newAppt == null, appt conflicts with current calendar
 		{
@@ -289,16 +289,34 @@ public class Node {
 					delAppt = appt;
 				}
 			}
-			//delete appointment have to do outside iterating on currentAppts
-			// because delete() deletes from currentAppts collection
+			
 			if (delAppt != null){
-				
-				
-				//clear calendar
-				for (Integer id:delAppt.getParticipants()) {
-					for (int j = delAppt.getStartIndex(); j < delAppt.getEndIndex(); j++) {
-						this.calendars[id][delAppt.getDay().ordinal()][j] = 0;
+				LogEntry e = createLogEntry(delAppt, log.size(), this.nodeId);
+				// need to send new LogEntry to leader
+				if (newEntry != null && this.nodeId != this.proposerId){
+					sendProposal(newEntry);
+					
+				}
+				else if (newEntry != null && this.nodeId == this.proposerId){
+					// handling for when leader wants to propose a new log entry
+					this.logPos = newEntry.getLogPos();
+					if (stillUpdating){
+						// push this onto queue
+						entryQueue.offer(newEntry);
 					}
+					else{
+						// can start with accept phase because we're up to date on log
+						this.m += this.incAmt;
+						saveNodeState();
+						if (entryQueue.isEmpty()){
+							startPaxos(newEntry);
+						}
+						else{
+							entryQueue.offer(newEntry);
+							startPaxos(entryQueue.poll());
+						}
+					}
+
 				}
 				// send message to distinguished proposer, unless self is proposer
 				if (proposerId != nodeId ) {
