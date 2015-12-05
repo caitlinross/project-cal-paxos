@@ -286,8 +286,55 @@ public class Appointment implements Serializable, Comparable<Appointment> {
 	@Override
 	public String toString() {
 		return "Appointment [name=" + name + ", day=" + day.ordinal() + ", start=" + start + ", end=" + end + ", sAMPM=" + sAMPM
-				+ ", eAMPM=" + eAMPM + ", participants=" + participants + ", initNode=" + initNode + ", apptID="
-				+ apptID + ", startIndex=" + startIndex + ", endIndex=" + endIndex + "]";
+				+ ", eAMPM=" + eAMPM + ", participants=" + participants.toString() + ", initNode=" + initNode + ", apptID="
+				+ apptID + "]";
 	}
 	
+	public static Appointment fromString(String str){
+		Appointment a = null;
+		String name = "";
+		Day day = Day.SUNDAY;
+		int start = -1;
+		int end = -1;
+		String sAMPM = "";
+		String eAMPM = "";
+		ArrayList<Integer> participants = new ArrayList<Integer>();
+		int initNode = -1;
+		String apptID = "";
+		
+		
+		String newStr = str.split("[\\[\\]]")[1]; 
+		String[] parts = newStr.split(",");
+		for (String s:parts){
+			String[] p = s.split("=");
+			if (p[0].equals("name"))
+				name = p[1];
+			else if (p[0].equals("day"))
+				day = Day.values()[Integer.parseInt(p[1])];
+			else if (p[0].equals("start"))
+				start = Integer.parseInt(p[1]);
+			else if (p[0].equals("end"))
+				end = Integer.parseInt(p[1]);
+			else if (p[0].equals("sAMPM"))
+				sAMPM = p[1];
+			else if (p[0].equals("eAMPM"))
+				eAMPM = p[1];
+			else if (p[0].equals("participants")){
+				String pars = p[1].split("[\\[\\]]")[1];
+				String[] par = pars.split(",");
+				for (String st:par){
+					participants.add(Integer.parseInt(st));
+				}
+			}
+			else if (p[0].equals("initNode"))
+				initNode = Integer.parseInt(p[1]);
+			else if (p[0].equals("apptID"))
+				apptID = p[1];
+			
+				
+		}
+		a = new Appointment(name, day, start, end, sAMPM, eAMPM, apptID, participants, initNode);
+	
+		return a;
+	}
 }

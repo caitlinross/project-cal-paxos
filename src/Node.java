@@ -338,6 +338,7 @@ public class Node {
 			reader = new BufferedReader(new FileReader(this.stateLog));
 			String text = null;
 			int lineNo = 0;
+			LogEntry e = null;
 		    while ((text = reader.readLine()) != null) {
 		    	String[] parts = text.split(",");
 		        if (lineNo == 0){ // restore node clock
@@ -345,10 +346,22 @@ public class Node {
 		        	
 		        }
 		        else{ 
+		        	if (text.startsWith("LogEntry")){
+		        		if (e != null){
+		        			// done adding appts for previous log entry
+		        			log.add(e); 
+		        		}
+		        		e = LogEntry.fromString(text);
+		        	}
+		        	else if (text.startsWith("Appointment")){
+		        		e.addAppt(Appointment.fromString(text));
+		        	}
+		        		
 		        }
 		        lineNo++;
 		    }
-		    reader.close();
+		    log.add(e); //add the last log entry to the log
+ 		    reader.close();
 		} catch (FileNotFoundException e2) {
 			e2.printStackTrace();
 		} catch (IOException e) {

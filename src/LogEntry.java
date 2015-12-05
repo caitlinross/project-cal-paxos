@@ -92,6 +92,34 @@ public class LogEntry implements Serializable, Comparable<LogEntry> {
 		return str;
 	}
 	
+	/**
+	 * Takes a string and converts the information to LogEntry object
+	 * @return
+	 */
+	public static LogEntry fromString(String str){
+		LogEntry e = null;
+		int logPos = -1;
+		boolean unknown = true;
+		int owner = -1;
+		
+		String newStr = str.split("[\\[\\]]")[1]; 
+		String[] parts = newStr.split(",");
+		for (String s:parts){
+			String[] p = s.split("=");
+			if (p[0].equals("logPos"))
+				logPos = Integer.parseInt(p[1]);
+			else if (p[0].equals("unknown"))
+				unknown = Boolean.parseBoolean(p[1]);
+			else if (p[0].equals("owner"))
+				owner = Integer.parseInt(p[1]);
+				
+		}
+		e = new LogEntry(logPos, owner);
+		e.setUnknown(unknown);
+		
+		return e;
+	}
+	
 	
 	
 
