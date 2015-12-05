@@ -14,15 +14,15 @@ public class Node {
 	private int nodeId;
 	private int numNodes; 
 	private String stateLog;
-	private int leaderId;
+	//private int proposerId;
 	private int incAmt; // amount to increment m (proposal numbers) by to have unique numbers
 	private boolean stillUpdating;
 	
 	//leader election vars
 	private int proposerId;
 	private boolean isProposer;
-	private int numOks;
-	
+	private boolean findingProposer;
+	private LogEntry savedEntry;
 	
 	// Paxos vars
 	private int maxPrepare;
@@ -101,7 +101,8 @@ public class Node {
 		else {
 			isProposer = false;
 		}
-		this.numOks = 0;
+		this.findingProposer = false;
+		this.savedEntry = null;
 
 		// recover node state if this is restarting from crash
 		if (recovery){
@@ -110,7 +111,7 @@ public class Node {
 		}
 		
 		// TODO remove this once leader election is added; just used to test Paxos without leader election and crashes
-		this.leaderId = 0;
+		//this.proposerId = 0;
 		
 	}
 
@@ -221,13 +222,11 @@ public class Node {
 		}		
 		
 		// need to send new LogEntry to leader
-		if (newEntry != null && this.nodeId != this.leaderId){
-			// increase proposal id before sending
-			this.m += this.incAmt;
-			saveNodeState();
+		if (newEntry != null && this.nodeId != this.proposerId){
 			sendProposal(newEntry);
+			
 		}
-		else if (newEntry != null && this.nodeId == this.leaderId){
+		else if (newEntry != null && this.nodeId == this.proposerId){
 			// handling for when leader wants to propose a new log entry
 			this.logPos = newEntry.getLogPos();
 			if (stillUpdating){
@@ -253,21 +252,6 @@ public class Node {
 			System.out.println("This appointment conflicts!");
 		}
 		
-		// TODO reconcile this block with the previous if/else block
-		/*// send message to distinguished proposer, unless self is proposer
-		if (proposerId != nodeId ) {
-			int success = -1;
-			success = sendCalendar(proposerId, 4, calendars, currentAppts);
-			if (success != 1) {
-				election();
-				sendCalendar(proposerId, 4, calendars, currentAppts);
-			}
-		}
-		else {
-			//run paxos
-		}*/
-		
-
 	}
 	
 	/**
@@ -365,6 +349,8 @@ public class Node {
 			for (int i=0; i<numNodes; i++) {
 				if (i != nodeId) {
 					send(i, MessageType.COORDINATOR);
+					findingProposer = false;
+					startPaxos(savedEntry);
 				}
 			}
 			
@@ -384,7 +370,7 @@ public class Node {
 			Socket socket = new Socket(hostNames.get(k), port);
 			OutputStream out = socket.getOutputStream();
 			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
-			objectOutput.writeInt(msgType.ordinal()); //1 - election, 2 - ok, 3 - coordinator
+			objectOutput.writeInt(msgType.ordinal()); 
 			objectOutput.writeInt(nodeId);
 			objectOutput.close();
 			out.close();
@@ -401,36 +387,6 @@ public class Node {
 		}
            
 	}
-	
-	// TODO probably delete?
-	/*public int sendCalendar(final int k, int msgType, int[][][] cal, Set<Appointment> appts){
-
-		try {
-			Socket socket = new Socket(hostNames.get(k), port);
-			OutputStream out = socket.getOutputStream();
-			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
-			objectOutput.writeInt(0);  // 0 means sending set of events
-			objectOutput.writeInt(msgType); //1 - election, 2 - ok, 3 - coordinator
-			objectOutput.writeInt(nodeId);
-			objectOutput.writeObject(cal);
-			objectOutput.writeObject(appts);
-			objectOutput.close();
-			out.close();
-			socket.close();
-			return 1;
-		} 
-		catch (ConnectException | UnknownHostException ce){
-			return 0;
-		}
-
-		catch (IOException e) {
-			e.printStackTrace();
-			return 0;
-		}
-           
-	}*/
-	
-	
 	
 	/**
 	 * print out the calendar to the terminal
@@ -536,7 +492,7 @@ public class Node {
 	 */
 	public void sendProposal(LogEntry entry){
 		try {
-			Socket socket = new Socket(hostNames.get(this.leaderId), port);
+			Socket socket = new Socket(hostNames.get(this.proposerId), port);
 			OutputStream out = socket.getOutputStream();
 			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
 			objectOutput.writeInt(MessageType.PROPOSE.ordinal());  
@@ -546,6 +502,11 @@ public class Node {
 			out.close();
 			socket.close();
 		} 
+		catch (ConnectException | UnknownHostException ce){ // the leader is down, start a new election
+			savedEntry = entry;
+			findingProposer = true;
+			election();
+		}
 		catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -604,6 +565,8 @@ public class Node {
 				int sender = objectInput.readInt();
 				proposerId = sender;
 				isProposer = false;
+				findingProposer = false;
+				sendProposal(savedEntry);
 			}
 			
 			objectInput.close();
@@ -719,16 +682,7 @@ public class Node {
 	public void receivePacket(DatagramPacket packet){
 		// TODO  probably need some sort of queue for handling messages for different log entry
 		// i.e. only work on one log entry at a time, keep track with this.logPos
-		
-		// TODO change this back when done testing on my personal computers
 		int senderId = -1;
-		if (this.nodeId == 0)
-			senderId = 1;
-		else
-			senderId = 0;
-		//if (this.hostNames.contains(packet.getAddress().toString())){
-		//	senderId = this.hostNames.indexOf(packet.getAddress().toString());
-		//}
 
 		try {
 			ByteArrayInputStream byteStream = new ByteArrayInputStream(packet.getData());
@@ -739,21 +693,25 @@ public class Node {
 		    if (msg.equals(MessageType.PREPARE)){
 		    	int m = is.readInt();
 		    	int logPos = is.readInt();
+		    	senderId = is.readInt();
 		    	prepare(m, logPos, senderId);
 		    }
 		    else if (msg.equals(MessageType.PROMISE)){
 		    	int accNum = is.readInt();
 		    	LogEntry accVal = (LogEntry) is.readObject();
+		    	senderId = is.readInt();
 		    	promise(accNum, accVal, senderId);
 		    }
 		    else if (msg.equals(MessageType.ACCEPT)){
 		    	int m = is.readInt();
 		    	LogEntry v = (LogEntry) is.readObject();
+		    	senderId = is.readInt();
 		    	accept(m, v, senderId);
 		    }
 		    else if (msg.equals(MessageType.ACK)){
 		    	int accNum = is.readInt();
 		    	LogEntry accVal = (LogEntry) is.readObject();
+		    	senderId = is.readInt();
 		    	ack(accNum, accVal, senderId);
 		    }
 		    else if (msg.equals(MessageType.COMMIT)){
@@ -826,6 +784,7 @@ public class Node {
 			os.writeInt(MessageType.PREPARE.ordinal());
 			os.writeInt(this.m);
 			os.writeInt(logPos);
+			os.writeInt(this.nodeId);
 			os.flush();
 			byte[] data = outputStream.toByteArray();
 			// send promise message to all other nodes
@@ -855,6 +814,7 @@ public class Node {
 			os.writeInt(MessageType.ACCEPT.ordinal());
 			os.writeInt(m);
 			os.writeObject(v);
+			os.writeInt(this.nodeId);
 			os.flush();
 			byte[] data = outputStream.toByteArray();
 			// send reply with m and v
@@ -886,6 +846,7 @@ public class Node {
 				os.writeInt(MessageType.PROMISE.ordinal());
 				os.writeInt(this.accNum);
 				os.writeObject(this.accVal);
+				os.writeInt(this.nodeId);
 				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
@@ -958,6 +919,7 @@ public class Node {
 				os.writeInt(MessageType.ACCEPT.ordinal());
 				os.writeInt(this.m);
 				os.writeObject(v);
+				os.writeInt(this.nodeId);
 				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with m and v
@@ -994,6 +956,7 @@ public class Node {
 				os.writeInt(MessageType.ACK.ordinal());
 				os.writeInt(this.accNum);
 				os.writeObject(this.accVal);
+				os.writeInt(this.nodeId);
 				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
