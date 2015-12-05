@@ -56,7 +56,7 @@ public class Node {
 		this.numNodes = totalNodes;
 		this.stateLog = "nodestate.txt";
 		this.incAmt = totalNodes;
-		this.stillUpdating = true;
+		this.stillUpdating = false; //TODO make sure to set appropriately when chosen as leader
 		
 		this.maxPrepare = 0;
 		this.accNum = -1;
@@ -82,8 +82,10 @@ public class Node {
 		this.currentAppts = new HashSet<Appointment>();  // keep appointments from most recent log entry
 		
 		// recover node state if this is restarting from crash
-		if (recovery)
+		if (recovery){
 			restoreNodeState();
+			updateCalendars(log.get(log.size()-1));
+		}
 		
 		// TODO remove this once leader election is added; just used to test Paxos without leader election and crashes
 		this.leaderId = 0;
@@ -188,6 +190,7 @@ public class Node {
 		if (newEntry != null && this.nodeId != this.leaderId){
 			// increase proposal id before sending
 			this.m += this.incAmt;
+			saveNodeState();
 			sendProposal(newEntry);
 		}
 		else if (newEntry != null && this.nodeId == this.leaderId){
@@ -200,6 +203,7 @@ public class Node {
 			else{
 				// can start with accept phase because we're up to date on log
 				this.m += this.incAmt;
+				saveNodeState();
 				if (entryQueue.isEmpty()){
 					startPaxos(newEntry);
 				}
@@ -332,7 +336,7 @@ public class Node {
 	 *  recover from node failure
 	 */
 	public void restoreNodeState(){
-		// TODO finish this function
+		// finish this function
 		BufferedReader reader = null;
 		try {
 			reader = new BufferedReader(new FileReader(this.stateLog));
@@ -447,6 +451,7 @@ public class Node {
 				entry = (LogEntry) objectInput.readObject(); // this is most recent log entry
 				// add to log and update the calendars
 				this.log.add(entry.getLogPos(), entry);
+				saveNodeState();
 				updateCalendars(entry);
 				
 				// TODO report that appointment to be added has a conflict to user, or not;
@@ -525,6 +530,7 @@ public class Node {
 		else {
 			// start Paxos from the accept phase
 			this.m += this.incAmt;
+			saveNodeState();
 			startPaxos(newEntry);
 		}
 		
@@ -642,6 +648,7 @@ public class Node {
 			if (entry.isUnknown()){ // need to get information about this entry
 				// kick-off synod alg for each log position that the leader doesn't have info for
 				this.m += this.incAmt;
+				saveNodeState();
 				startPaxos(entry.getLogPos()); 
 			}
 			
@@ -652,6 +659,7 @@ public class Node {
 		// will know for certain after receiving enough promise msgs
 		this.logPos = this.log.size();
 		this.m += this.incAmt;
+		saveNodeState();
 		startPaxos(this.logPos);
 	}
 	
@@ -868,7 +876,9 @@ public class Node {
 			LogEntry v = accVal;
 			
 			// update proposing node's calendars
+			this.log.add(v.getLogPos(), v);
 			updateCalendars(v);
+			saveNodeState();
 			
 			// send commit message
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -901,7 +911,8 @@ public class Node {
 		this.log.add(v.getLogPos(), v);
 		//  need to update currentAppts and calendar stuff based on this new entry
 		updateCalendars(v);
-		// TODO write to storage in case of crash
+		// write to storage in case of crash
+		saveNodeState();
 	}
 	
 }

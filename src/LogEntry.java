@@ -85,7 +85,7 @@ public class LogEntry implements Serializable, Comparable<LogEntry> {
 	 */
 	@Override
 	public String toString() {
-		String str = "LogEntry [logPos=" + logPos + ", unknown=" + unknown + ", owner=" + owner + "\nappts:]\n";
+		String str = "LogEntry [logPos=" + logPos + ", unknown=" + unknown + ", owner=" + owner + "]\n";
 		for (Appointment a:this.appts){
 			str += a.toString() + "\n";
 		}
@@ -106,11 +106,11 @@ public class LogEntry implements Serializable, Comparable<LogEntry> {
 		String[] parts = newStr.split(",");
 		for (String s:parts){
 			String[] p = s.split("=");
-			if (p[0].equals("logPos"))
+			if (p[0].trim().equals("logPos"))
 				logPos = Integer.parseInt(p[1]);
-			else if (p[0].equals("unknown"))
+			else if (p[0].trim().equals("unknown"))
 				unknown = Boolean.parseBoolean(p[1]);
-			else if (p[0].equals("owner"))
+			else if (p[0].trim().equals("owner"))
 				owner = Integer.parseInt(p[1]);
 				
 		}

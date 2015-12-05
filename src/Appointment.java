@@ -285,9 +285,9 @@ public class Appointment implements Serializable, Comparable<Appointment> {
 	 */
 	@Override
 	public String toString() {
-		return "Appointment [name=" + name + ", day=" + day.ordinal() + ", start=" + start + ", end=" + end + ", sAMPM=" + sAMPM
-				+ ", eAMPM=" + eAMPM + ", participants=" + participants.toString() + ", initNode=" + initNode + ", apptID="
-				+ apptID + "]";
+		return "Appointment {name=" + name + "; day=" + day.ordinal() + "; start=" + start + "; end=" + end + "; sAMPM=" + sAMPM
+				+ "; eAMPM=" + eAMPM + "; participants=" + participants.toString() + "; initNode=" + initNode + "; apptID="
+				+ apptID + "}";
 	}
 	
 	public static Appointment fromString(String str){
@@ -303,32 +303,32 @@ public class Appointment implements Serializable, Comparable<Appointment> {
 		String apptID = "";
 		
 		
-		String newStr = str.split("[\\[\\]]")[1]; 
-		String[] parts = newStr.split(",");
+		String newStr = str.split("[{}]")[1]; 
+		String[] parts = newStr.split(";");
 		for (String s:parts){
 			String[] p = s.split("=");
-			if (p[0].equals("name"))
+			if (p[0].trim().equals("name"))
 				name = p[1];
-			else if (p[0].equals("day"))
+			else if (p[0].trim().equals("day"))
 				day = Day.values()[Integer.parseInt(p[1])];
-			else if (p[0].equals("start"))
+			else if (p[0].trim().equals("start"))
 				start = Integer.parseInt(p[1]);
-			else if (p[0].equals("end"))
+			else if (p[0].trim().equals("end"))
 				end = Integer.parseInt(p[1]);
-			else if (p[0].equals("sAMPM"))
+			else if (p[0].trim().equals("sAMPM"))
 				sAMPM = p[1];
-			else if (p[0].equals("eAMPM"))
+			else if (p[0].trim().equals("eAMPM"))
 				eAMPM = p[1];
-			else if (p[0].equals("participants")){
+			else if (p[0].trim().equals("participants")){
 				String pars = p[1].split("[\\[\\]]")[1];
 				String[] par = pars.split(",");
 				for (String st:par){
-					participants.add(Integer.parseInt(st));
+					participants.add(Integer.parseInt(st.trim()));
 				}
 			}
-			else if (p[0].equals("initNode"))
+			else if (p[0].trim().equals("initNode"))
 				initNode = Integer.parseInt(p[1]);
-			else if (p[0].equals("apptID"))
+			else if (p[0].trim().equals("apptID"))
 				apptID = p[1];
 			
 				
