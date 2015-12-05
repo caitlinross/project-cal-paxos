@@ -106,7 +106,7 @@ public class Node {
 		return calendars;
 	}
 	
-	/** TODO needs to send info to distinguished proposer
+	/** 
 	 * 
 	 * @param nodes participants in the new appointment
 	 * @param name name of appointment
@@ -158,15 +158,29 @@ public class Node {
 				time++;
 			}
 			newAppt = new Appointment(name, day, start, end, sAMPM, eAMPM, nodes, this.nodeId);
+			currentAppts.add(newAppt);
 		
+		}
+		//update calendar so time slots used by new appointment are set to 1s
+		time = startIndex;
+		while(timeAvail && time < endIndex){
+			for (Integer node:nodes){
+				synchronized(lock){
+					this.calendars[node][day.ordinal()][time] = 1;
+					
+				}
+			}
+			time++;
 		}
 		
 		// send message to distinguished proposer, unless self is proposer
 		if (proposerId != nodeId ) {
-			send(proposerId);
-			//waits for ack or cancellation message
-			//if none received, run leader election
-			election();
+			int success = -1;
+			success = sendCalendar(proposerId, 4, calendars, currentAppts);
+			if (success != 1) {
+				election();
+				sendCalendar(proposerId, 4, calendars, currentAppts);
+			}
 		}
 		else {
 			//run paxos
@@ -206,28 +220,14 @@ public class Node {
 				}
 				// send message to distinguished proposer, unless self is proposer
 				if (proposerId != nodeId ) {
-					//send(proposerId);
-					//waits for response from proposer
-					/* Caitlin: So the driver is set up to listen for both TCP and UDP messages.  You probably shouldn't be calling
-					 * receive() here.  The driver will get any message and forward it to the correct receive function 
-					 * (either receive() for TCP msgs or receivePacket() for UDP msgs).  You should change the receive() function
-					 * to do what you want to do here.
-					*/
-					//delete: receive(proposerId);
-					//upon receiving responses from other nodes, store them in a list
-					//select largest element
-					//message other nodes with new leader id
-					
-					//TODO: set up how to check is leader is down--
-					//current idea: just have it wait a small time amount, resend msg and if fails again, run election
-					//waits for ack or cancellation message
-					//if none received, run leader election
-					
-					//new idea: heartbeat() in driver, every process sends their current time and id to everyone else
-					//when want to send new calendar to leader, if leader's last sent message is more than a certain time length away
-					//do election
-					
-					//TODO: bullyElection(nodeID); 
+					int success = -1;
+					success = sendCalendar(proposerId, 4, calendars, currentAppts);
+
+					//leader is down, run leader election and try again
+					if (success != 1) {
+						election();
+						sendCalendar(proposerId, 4, calendars, currentAppts);
+					}
 				}
 				else {
 					//run paxos
@@ -298,6 +298,33 @@ public class Node {
            
 	}
 	
+	public int sendCalendar(final int k, int msgType, int[][][] cal, Set<Appointment> appts){
+
+		try {
+			Socket socket = new Socket(hostNames.get(k), port);
+			OutputStream out = socket.getOutputStream();
+			ObjectOutputStream objectOutput = new ObjectOutputStream(out);
+			objectOutput.writeInt(0);  // 0 means sending set of events
+			objectOutput.writeInt(msgType); //1 - election, 2 - ok, 3 - coordinator
+			objectOutput.writeInt(nodeId);
+			objectOutput.writeObject(cal);
+			objectOutput.writeObject(appts);
+			objectOutput.close();
+			out.close();
+			socket.close();
+			return 1;
+		} 
+		catch (ConnectException | UnknownHostException ce){
+			return 0;
+		}
+
+		catch (IOException e) {
+			e.printStackTrace();
+			return 0;
+		}
+           
+	}
+	
 	/**
 	 *  receives election info
 	 * @param clientSocket socket connection to receiving node
@@ -313,6 +340,32 @@ public class Node {
 			k = objectInput.readInt();
 			type = objectInput.readInt();
 			sender = objectInput.readInt();	
+			if (type == 4) {
+				//receiving calendar from sender
+				try {
+					int[][][] cal = (int[][][]) objectInput.readObject();
+					try {
+						Set<Appointment> appts = (Set<Appointment>) objectInput.readObject();
+						if (proposerId != nodeId) {
+							send(proposerId, 4, cal, appts);
+							//this should never be accessed
+							//but if by some freak chance a node sends a cal to the wrong person
+							//that other node should helpfully pass it on to the correct leader
+						}
+						else {
+							//paxos(cal, appts)
+						}
+					
+					}
+					catch (ClassNotFoundException e){
+						e.printStackTrace();
+					}
+				}
+				catch (ClassNotFoundException e){
+					e.printStackTrace();
+				}
+				
+			}
 			//type will be 1 - election, 2 - ok, 3 - coordinator
 			//sender is node who sent it
 			objectInput.close();
@@ -335,9 +388,7 @@ public class Node {
 			//received coordinator msg - set sender to proposer
 			proposerId = sender;
 			isProposer = false;
-		}		
-		
-		
+		}			
 	}
 	
 	
