@@ -769,6 +769,44 @@ public class Node {
 
 	}
 	
+	public void sendDummy(){
+		for (int i = 0; i < this.numNodes; i++){
+			if (i != this.nodeId){
+				try {
+					Socket socket = new Socket(hostNames.get(i), port);
+					OutputStream out = socket.getOutputStream();
+					ObjectOutputStream objectOutput = new ObjectOutputStream(out);
+					objectOutput.writeInt(MessageType.DUMMY.ordinal());
+					objectOutput.writeInt(0); // 0 means original dummy, 1 means a response
+					objectOutput.close();
+					out.close();
+					socket.close();
+					// tcp was successful -> node i is up
+					// dummy msg for udp now
+					try{
+						// put accVal and accNum 
+						ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+						ObjectOutputStream os = new ObjectOutputStream(outputStream);
+						os.writeInt(MessageType.DUMMY.ordinal());
+						os.writeInt(0);
+						os.writeInt(this.nodeId);
+						os.flush();
+						byte[] data = outputStream.toByteArray();
+						// send reply with accNum, accVal
+						System.out.println("Sending DUMMY msg to node " + i);
+						sendPacket(i, data);
+					
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				} 
+				catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+	
 	/*****  PAXOS specific functions below here *****/
 	/**
 	 * Determine message type and forward to appropriate function
@@ -819,6 +857,28 @@ public class Node {
 		    	LogEntry v = (LogEntry) is.readObject();
 		    	 System.out.println("Received " + msg + " msg");
 		    	commit(v);
+		    }
+		    else if (msg.equals(MessageType.DUMMY)){
+		    	int val = is.readInt();
+		    	int from = is.readInt();
+		    	if (val == 0){ // need to send dummy response back
+		    		try{
+						// put accVal and accNum 
+						ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+						ObjectOutputStream os = new ObjectOutputStream(outputStream);
+						os.writeInt(MessageType.DUMMY.ordinal());
+						os.writeInt(1); // 1 means this is a response to original dummy msg
+						os.writeInt(this.nodeId);
+						os.flush();
+						byte[] data = outputStream.toByteArray();
+						// send reply with accNum, accVal
+						System.out.println("Sending DUMMY msg to node " + from);
+						sendPacket(from, data);
+					
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+		    	}
 		    }
 		    is.close();
 		} catch (IOException e) {
