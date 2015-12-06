@@ -663,6 +663,11 @@ public class Node {
 					savedEntry = null;
 				}
 			}
+			else if (msg.equals(MessageType.DUMMY)){
+				// don't need to actually do anything with these values, just get rid of them
+				objectInput.readInt();
+				objectInput.readInt();
+			}
 			
 			objectInput.close();
 			in.close();
@@ -878,6 +883,7 @@ public class Node {
 						sendPacket(from, data);
 					
 					} catch (IOException e) {
+						// TODO probably remove before submitting, along with other dummy stacktrace prints
 						e.printStackTrace();
 					}
 		    	}
