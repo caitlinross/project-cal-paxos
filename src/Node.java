@@ -144,6 +144,11 @@ public class Node {
 		};
 		new Thread(udpThread).start();
 		
+		if (this.proposerId == this.nodeId)
+			System.out.println("I am the leader!");
+		else
+			System.out.println("I am NOT the leader");
+		
 	}
 
 	/**
