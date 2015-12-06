@@ -110,7 +110,7 @@ public class Node {
 		// recover node state if this is restarting from crash
 		if (recovery){
 			restoreNodeState();
-			updateCalendars(log.get(log.size()-1));
+			updateCalendars(log.get(getMostRecentEntry()));
 			election();
 		}
 		
@@ -223,17 +223,6 @@ public class Node {
 		int endIndex = Appointment.convertTime(end, eAMPM);
 		LogEntry newEntry = null;
 		
-		/*get calendar value and currentAppt list from last logEntry in log, 
-		*if log is empty, calendar is all zeros  and apptList is empty by default
-		*don't need to clear these values if new calendar isn't accepted by Paxos
-		*since it will be overwritten each time anyway, only successful versions 
-		*get saved to new logEntry
-		*/
-		/*if (log.size() > 0) {
-			calendars = log.get(log.size()-1).getCalendar();
-			currentAppts = log.get(log.size()-1).getAppts();
-		}*/
-		
 		// check calendar
 		boolean timeAvail = true;
 		int time = startIndex;
@@ -331,11 +320,7 @@ public class Node {
 	 */
 	public void deleteOldAppointment(String apptID) {
 		Appointment delAppt = null;
-		//get calendar and appt list from latest log entry
-		/*if (log.size() > 0) {
-			calendars = log.get(log.size()-1).getCalendar();
-			currentAppts = log.get(log.size()-1).getAppts();
-		}*/
+		updateCalendars(log.get(getMostRecentEntry()));
 		synchronized(lock) {
 			for (Appointment appt:this.currentAppts){
 				//find corresponding appointment
@@ -453,11 +438,21 @@ public class Node {
            
 	}
 	
+	public int getMostRecentEntry(){
+		int pos = 0;
+		for (LogEntry e:log){
+			if (!e.isUnknown() && e.getLogPos() > pos){
+				pos = e.getLogPos();
+			}
+		}
+		return pos;
+	}
+	
 	/**
 	 * print out the calendar to the terminal
 	 */
 	public void printCalendar() {
-		updateCalendars(log.get(log.size()-1));
+		updateCalendars(log.get(getMostRecentEntry()));
 		//now have set of all appointments event records which are currently in calendar
 		//next: get eRs by day, and print them
 		ArrayList<Appointment> apptList = new ArrayList<Appointment>();
@@ -627,7 +622,7 @@ public class Node {
 				//this.log.add(entry.getLogPos(), entry);
 				LogEntry.fillSet(entry.getLogPos(), entry, log, this.nodeId);
 				saveNodeState();
-				updateCalendars(entry);
+				updateCalendars(log.get(getMostRecentEntry()));
 				
 				// report that appointment to be added has a conflict to user, or not;
 				// without it will update on the node and user will be able to view up to date calendar
@@ -678,7 +673,7 @@ public class Node {
 		
 		// create a tmpCal for checking for conflicts
 		int[][][] tmpCal = new int[numNodes][7][48];
-		updateCalendars(newEntry);
+		updateCalendars(log.get(getMostRecentEntry()));
 		// for each appt in currentAppts, if appt in tmpAppts, delete from tmpAppts
 		// else remember that this is a deleted appointment
 		for (Appointment a:currentAppts){
