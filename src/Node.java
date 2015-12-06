@@ -17,6 +17,7 @@ public class Node {
 	//private int proposerId;
 	private int incAmt; // amount to increment m (proposal numbers) by to have unique numbers
 	private boolean stillUpdating;
+	private DatagramSocket udpSocket;
 	
 	//leader election vars
 	private int proposerId;
@@ -112,6 +113,36 @@ public class Node {
 		
 		// TODO remove this once leader election is added; just used to test Paxos without leader election and crashes
 		//this.proposerId = 0;
+		
+		// set up datagram stuff to listen for UDP for Paxos communication
+		Runnable udpThread = new Runnable(){
+			public synchronized void run() {
+				System.out.println("Start listening for other nodes, UDP");
+				//final DatagramSocket socket;
+		        try {
+		        	udpSocket = new DatagramSocket(port);
+		            while (true) {
+		            	byte[] buf = new byte[10000];  
+		            	final DatagramPacket packet = new DatagramPacket(buf, buf.length);
+		            	udpSocket.receive(packet);
+		            	Runnable runnable = new Runnable() {
+		                    public synchronized void run() {
+		                    	receivePacket(packet);
+		                    }
+		                };
+		                new Thread(runnable).start();
+		              
+		            }
+		        } 
+		        catch (IOException e) {
+					 System.out.println("Exception caught when trying to listen on port " + port);
+				    System.out.println(e.getMessage());
+					e.printStackTrace();
+				}
+		      
+			}
+		};
+		new Thread(udpThread).start();
 		
 	}
 
@@ -767,12 +798,12 @@ public class Node {
 	 */
 	public void sendPacket(int sendTo, byte[] data){
 		try{
-			DatagramSocket socket = new DatagramSocket();
+			//DatagramSocket socket = new DatagramSocket();
 			InetAddress address = InetAddress.getByName(this.hostNames.get(sendTo)); 
 			System.out.println("Sending to IP address " + this.hostNames.get(sendTo));
 			DatagramPacket packet = new DatagramPacket(data, data.length, address, this.port);
-			socket.send(packet);
-			socket.close();
+			udpSocket.send(packet);
+			//udpSocket.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -1060,5 +1091,5 @@ public class Node {
 		// write to storage in case of crash
 		saveNodeState();
 	}
-	
+
 }

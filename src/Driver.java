@@ -44,7 +44,7 @@ public class Driver {
 			e.printStackTrace();
 		}
 	    
-		final int port = 4445;
+		final int port = 4444;
 
 		
 		InetAddress inetAddr;
@@ -89,34 +89,7 @@ public class Driver {
 		};
 		new Thread(tcpThread).start();
         
-		// set up datagram stuff to listen for UDP for Paxos communication
-		Runnable udpThread = new Runnable(){
-			public synchronized void run() {
-				System.out.println("Start listening for other nodes, UDP");
-				final DatagramSocket socket;
-		        try {
-		        	socket = new DatagramSocket(port);
-		            while (true) {
-		            	byte[] buf = new byte[10000];  
-		            	final DatagramPacket packet = new DatagramPacket(buf, buf.length);
-		            	socket.receive(packet);
-		            	Runnable runnable = new Runnable() {
-		                    public synchronized void run() {
-		                    	node.receivePacket(packet);
-		                    }
-		                };
-		                new Thread(runnable).start();
-		                
-		            }
-		        } 
-		        catch (IOException e) {
-					 System.out.println("Exception caught when trying to listen on port " + port);
-				    System.out.println(e.getMessage());
-					e.printStackTrace();
-				}
-			}
-		};
-		new Thread(udpThread).start();
+		
         
 		// TODO perhaps add a "view log" that outputs all log entries the node knows about, to make it easier while demoing to Stacy
 		// loop to ask about adding, deleting, viewing appointments
