@@ -26,7 +26,7 @@ public class Node {
 	//leader election vars
 	private int proposerId;
 	//private boolean isProposer;
-	//private boolean findingProposer;
+	private boolean foundProposer;
 	private LogEntry savedEntry;
 	
 	// Paxos vars
@@ -71,6 +71,7 @@ public class Node {
 		this.setReportConflict(false);
 		this.promiseMaj = false;
 		this.ackMaj = false;
+		this.foundProposer = false;
 		
 		this.maxPrepare = 0;
 		this.accNum = -1;
@@ -404,7 +405,8 @@ public class Node {
 				
 			}
 		}
-		if (successSum == 0) {
+		if (successSum == 0 && !this.foundProposer) {
+			this.foundProposer = true;
 			System.out.println("am highest node living");
 			//all other nodes down, is leader by default;
 			//isProposer = true;
@@ -659,6 +661,7 @@ public class Node {
 				}
 			}
 			else if (msg.equals(MessageType.OK)){
+				System.out.println("Received " + msg + " msg");
 				//isProposer = false;
 				proposerId = -1;  // unsure of proposer, but it's definitely not me
 			}
@@ -963,6 +966,7 @@ public class Node {
 	public void startPaxos(int logPos){
 		this.promiseMaj = false;
 		this.ackMaj = false;
+		this.foundProposer = false; // proposer def been found at this point
 		try{
 			// put m into byte array
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -994,6 +998,7 @@ public class Node {
 	public void startPaxos(LogEntry v){
 		this.promiseMaj = false;
 		this.ackMaj = false;
+		this.foundProposer = false; // proposer def been found at this point
 		try {
 			// send accept message
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
