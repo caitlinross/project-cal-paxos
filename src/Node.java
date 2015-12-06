@@ -612,7 +612,7 @@ public class Node {
 		
 		// create a tmpCal for checking for conflicts
 		int[][][] tmpCal = new int[numNodes][7][48];
-		
+		updateCalendars(newEntry);
 		// for each appt in currentAppts, if appt in tmpAppts, delete from tmpAppts
 		// else remember that this is a deleted appointment
 		for (Appointment a:currentAppts){
@@ -765,6 +765,7 @@ public class Node {
 		try{
 			DatagramSocket socket = new DatagramSocket();
 			InetAddress address = InetAddress.getByName(this.hostNames.get(sendTo)); 
+			System.out.println("Sending to IP address " + this.hostNames.get(sendTo));
 			DatagramPacket packet = new DatagramPacket(data, data.length, address, this.port);
 			socket.send(packet);
 			socket.close();
