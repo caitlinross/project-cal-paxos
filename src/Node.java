@@ -666,7 +666,7 @@ public class Node {
 			else if (msg.equals(MessageType.DUMMY)){
 				// don't need to actually do anything with these values, just get rid of them
 				objectInput.readInt();
-				objectInput.readInt();
+				//objectInput.readInt();
 			}
 			
 			objectInput.close();
