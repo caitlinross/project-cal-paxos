@@ -113,13 +113,13 @@ public class Node {
 		Runnable udpThread = new Runnable(){
 			public synchronized void run() {
 				System.out.println("Start listening for other nodes, UDP");
-				//final DatagramSocket socket;
+				final DatagramSocket socket;
 		        try {
-		        	udpSocket = new DatagramSocket(port);
+		        	socket = new DatagramSocket(port);
 		            while (true) {
 		            	byte[] buf = new byte[10000];  
 		            	final DatagramPacket packet = new DatagramPacket(buf, buf.length);
-		            	udpSocket.receive(packet);
+		            	socket.receive(packet);
 		            	Runnable runnable = new Runnable() {
 		                    public synchronized void run() {
 		                    	receivePacket(packet);
@@ -138,6 +138,11 @@ public class Node {
 			}
 		};
 		new Thread(udpThread).start();
+		try {
+			udpSocket = new DatagramSocket();
+		} catch (SocketException e) {
+			e.printStackTrace();
+		}
 		
 		if (this.proposerId == this.nodeId)
 			System.out.println("I am the leader!");
