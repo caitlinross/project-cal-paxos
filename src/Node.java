@@ -457,6 +457,7 @@ public class Node {
 	 * print out the calendar to the terminal
 	 */
 	public void printCalendar() {
+		updateCalendars(log.get(log.size()-1));
 		//now have set of all appointments event records which are currently in calendar
 		//next: get eRs by day, and print them
 		ArrayList<Appointment> apptList = new ArrayList<Appointment>();
@@ -486,6 +487,15 @@ public class Node {
 				System.out.println();
 			}
 			apptList.clear();
+		}
+	}
+	
+	/**
+	 * print log 
+	 */
+	public void printLog(){
+		for (LogEntry e:this.log){
+			System.out.println(e.toString());
 		}
 	}
 	

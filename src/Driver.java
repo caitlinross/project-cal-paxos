@@ -90,16 +90,14 @@ public class Driver {
 		new Thread(tcpThread).start();
         
 		
-        
-		// TODO perhaps add a "view log" that outputs all log entries the node knows about, to make it easier while demoing to Stacy
-		// loop to ask about adding, deleting, viewing appointments
+		// loop to ask about adding, deleting, viewing appointments, or viewing the whole log
 		while(true){
 			@SuppressWarnings("resource")
 			Scanner in = new Scanner(System.in);
 			String action;
 			String name;
 
-			System.out.println("Would you like to add or delete an appointment, or print the calendar? (type 'add', 'delete', or 'print')");
+			System.out.println("Would you like to add or delete an appointment, print the current calendar, or view entire log? (type 'add', 'delete', 'print', 'log')");
 			action = in.nextLine().trim();
 			if (action.equals("add")) {
 				int start;
@@ -154,7 +152,10 @@ public class Driver {
 				
 			}
 			else if (action.equals("print")) {
-					node.printCalendar();
+				node.printCalendar();
+			}
+			else if (action.equals("log")){
+				node.printLog();
 			}
 			else {
 				System.out.println("Action not recognized, please enter 'add', 'delete', or 'print'");
