@@ -1,5 +1,6 @@
 import java.io.*;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -149,4 +150,15 @@ public class LogEntry implements Serializable, Comparable<LogEntry> {
 		return e;
 	}
 	
+	public static void fillSet(int index, LogEntry entry, List<LogEntry> list, int owner){
+		if (index > list.size() - 1){
+			for (int i = list.size(); i < index; i++){
+				list.add(new LogEntry(i, owner));
+			}
+			list.add(entry);
+		}
+		else{
+			list.set(index, entry);
+		}
+	}
 }

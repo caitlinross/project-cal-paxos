@@ -111,9 +111,6 @@ public class Node {
 			updateCalendars(log.get(log.size()-1));
 		}
 		
-		// TODO remove this once leader election is added; just used to test Paxos without leader election and crashes
-		//this.proposerId = 0;
-		
 		// set up datagram stuff to listen for UDP for Paxos communication
 		Runnable udpThread = new Runnable(){
 			public synchronized void run() {
@@ -519,7 +516,8 @@ public class Node {
 		        	if (text.startsWith("LogEntry")){
 		        		if (e != null){
 		        			// done adding appts for previous log entry
-		        			log.add(e); 
+		        			//log.add(e); 
+		        			LogEntry.fillSet(e.getLogPos(), e, log, this.nodeId);
 		        		}
 		        		e = LogEntry.fromString(text);
 		        	}
@@ -530,8 +528,9 @@ public class Node {
 		        }
 		        lineNo++;
 		    }
-		    log.add(e); //add the last log entry to the log
- 		    reader.close();
+		    //log.add(e); //add the last log entry to the log
+		    LogEntry.fillSet(e.getLogPos(), e, log, this.nodeId);
+		    reader.close();
 		} catch (FileNotFoundException e2) {
 			e2.printStackTrace();
 		} catch (IOException e) {
@@ -600,7 +599,8 @@ public class Node {
 				// node received conflict message from the leader
 				entry = (LogEntry) objectInput.readObject(); // this is most recent log entry
 				// add to log and update the calendars
-				this.log.add(entry.getLogPos(), entry);
+				//this.log.add(entry.getLogPos(), entry);
+				LogEntry.fillSet(entry.getLogPos(), entry, log, this.nodeId);
 				saveNodeState();
 				updateCalendars(entry);
 				
@@ -798,6 +798,7 @@ public class Node {
 	 */
 	public void sendPacket(int sendTo, byte[] data){
 		try{
+			Thread.sleep(2000); // to help with flow control
 			//DatagramSocket socket = new DatagramSocket();
 			InetAddress address = InetAddress.getByName(this.hostNames.get(sendTo)); 
 			System.out.println("Sending to IP address " + this.hostNames.get(sendTo));
@@ -805,6 +806,8 @@ public class Node {
 			udpSocket.send(packet);
 			//udpSocket.close();
 		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
 		
@@ -1053,7 +1056,8 @@ public class Node {
 			LogEntry v = accVal;
 			
 			// update proposing node's calendars
-			this.log.add(v.getLogPos(), v);
+			//this.log.add(v.getLogPos(), v);
+			LogEntry.fillSet(v.getLogPos(), v, log, this.nodeId);
 			updateCalendars(v);
 			saveNodeState();
 			
@@ -1085,11 +1089,14 @@ public class Node {
 	 * @param v the log entry to be committed
 	 */
 	public void commit(LogEntry v){
-		this.log.add(v.getLogPos(), v);
+		//this.log.add(v.getLogPos(), v);
+		LogEntry.fillSet(v.getLogPos(), v, log, this.nodeId);
 		//  need to update currentAppts and calendar stuff based on this new entry
 		updateCalendars(v);
 		// write to storage in case of crash
 		saveNodeState();
 	}
+	
+	
 
 }
