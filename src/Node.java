@@ -20,6 +20,8 @@ public class Node {
 	private DatagramSocket udpSocket;
 	private boolean reportConflict;
 	private int udpPort;
+	private boolean promiseMaj;
+	private boolean ackMaj;
 	
 	//leader election vars
 	private int proposerId;
@@ -67,6 +69,8 @@ public class Node {
 		this.incAmt = totalNodes;
 		this.stillUpdating = false; //TODO make sure to set appropriately when chosen as leader
 		this.setReportConflict(false);
+		this.promiseMaj = false;
+		this.ackMaj = false;
 		
 		this.maxPrepare = 0;
 		this.accNum = -1;
@@ -109,7 +113,7 @@ public class Node {
 		this.savedEntry = null;
 
 		
-		this.udpPort = 6998;
+		this.udpPort = 6996;
 		// set up datagram stuff to listen for UDP for Paxos communication
 		Runnable udpThread = new Runnable(){
 			public synchronized void run() {
@@ -253,7 +257,7 @@ public class Node {
 		
 		// create appointment object
 		if (timeAvail){
-			time = startIndex;
+			/*time = startIndex;
 			while(time < endIndex){
 				for(Integer node:nodes){
 					synchronized(lock){
@@ -261,7 +265,7 @@ public class Node {
 					}
 				}
 				time++;
-			}
+			}*/
 			newAppt = new Appointment(name, day, start, end, sAMPM, eAMPM, nodes, this.nodeId);
 			// create new log entry with this appt to try to submit
 			int logPos = log.size();
@@ -957,6 +961,8 @@ public class Node {
 	 * @param logPos the position to get info for
 	 */
 	public void startPaxos(int logPos){
+		this.promiseMaj = false;
+		this.ackMaj = false;
 		try{
 			// put m into byte array
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -986,6 +992,8 @@ public class Node {
 	 * @param v
 	 */
 	public void startPaxos(LogEntry v){
+		this.promiseMaj = false;
+		this.ackMaj = false;
 		try {
 			// send accept message
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -1055,7 +1063,8 @@ public class Node {
 				totalRecd++;
 			}
 		}
-		if (totalRecd > (this.numNodes-1)/2){ // has received a majority of responses
+		if (totalRecd > (this.numNodes-1)/2 && !this.promiseMaj){ // has received a majority of responses
+			this.promiseMaj = true;
 			int maxNum = 0;
 			int index = -1;
 			LogEntry v = null;
@@ -1163,7 +1172,8 @@ public class Node {
 				totalRecd++;
 			}
 		}
-		if (totalRecd > (this.numNodes-1)/2){ // has received a majority of responses
+		if (totalRecd > (this.numNodes-1)/2 && !this.ackMaj){ // has received a majority of responses
+			this.ackMaj = true;
 			// at this point, all ack msgs received for this logPosition should have same accVal
 			LogEntry v = accVal;
 			
