@@ -109,7 +109,7 @@ public class Node {
 		this.savedEntry = null;
 
 		
-		this.udpPort = 6999;
+		this.udpPort = 6998;
 		// set up datagram stuff to listen for UDP for Paxos communication
 		Runnable udpThread = new Runnable(){
 			public synchronized void run() {
@@ -986,10 +986,10 @@ public class Node {
 	 * @param v
 	 */
 	public void startPaxos(LogEntry v){
-		// send accept message
-		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-		ObjectOutputStream os;
 		try {
+			// send accept message
+			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+			ObjectOutputStream os;
 			os = new ObjectOutputStream(outputStream);
 			os.writeInt(MessageType.ACCEPT.ordinal());
 			os.writeInt(m);
