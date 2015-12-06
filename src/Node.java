@@ -223,6 +223,7 @@ public class Node {
 		
 		// need to send new LogEntry to leader
 		if (newEntry != null && this.nodeId != this.proposerId){
+			System.out.println("Sending to proposer " + this.proposerId);
 			sendProposal(newEntry);
 			
 		}
@@ -548,8 +549,10 @@ public class Node {
 			ObjectInputStream objectInput = new ObjectInputStream(in);
 			int tmp = objectInput.readInt();
 			msg = MessageType.values()[tmp];
+			
 			if (msg.equals(MessageType.PROPOSE)){
 				senderId = objectInput.readInt();
+				System.out.println("Received " + msg + " msg from node " + senderId);
 				entry = (LogEntry) objectInput.readObject();
 				if (entryQueue.isEmpty())
 					checkProposal(entry);
@@ -570,9 +573,10 @@ public class Node {
 				// without it will update on the node and user will be able to view up to date calendar
 			}
 			else if (msg.equals(MessageType.ELECTION)){
-				int sender = objectInput.readInt();
-				if (nodeId > sender){
-					send(sender, MessageType.OK);
+				senderId = objectInput.readInt();
+				System.out.println("Received " + msg + " msg from node " + senderId);
+				if (nodeId > senderId){
+					send(senderId, MessageType.OK);
 					election();
 				}
 			}
@@ -580,8 +584,9 @@ public class Node {
 				isProposer = false;
 			}
 			else if (msg.equals(MessageType.COORDINATOR)){
-				int sender = objectInput.readInt();
-				proposerId = sender;
+				senderId = objectInput.readInt();
+				proposerId = senderId;
+				System.out.println("Received " + msg + " msg from node " + senderId);
 				isProposer = false;
 				findingProposer = false;
 				sendProposal(savedEntry);
@@ -707,33 +712,38 @@ public class Node {
 		    ObjectInputStream is = new ObjectInputStream(new BufferedInputStream(byteStream));
 		    int tmp = is.readInt();
 		    MessageType msg = MessageType.values()[tmp];
-		    System.out.println("Received " + msg + " msg from node " + senderId);
+		   
 		    if (msg.equals(MessageType.PREPARE)){
 		    	int m = is.readInt();
 		    	int logPos = is.readInt();
 		    	senderId = is.readInt();
+		    	System.out.println("Received " + msg + " msg from node " + senderId);
 		    	prepare(m, logPos, senderId);
 		    }
 		    else if (msg.equals(MessageType.PROMISE)){
 		    	int accNum = is.readInt();
 		    	LogEntry accVal = (LogEntry) is.readObject();
 		    	senderId = is.readInt();
+		    	System.out.println("Received " + msg + " msg from node " + senderId);
 		    	promise(accNum, accVal, senderId);
 		    }
 		    else if (msg.equals(MessageType.ACCEPT)){
 		    	int m = is.readInt();
 		    	LogEntry v = (LogEntry) is.readObject();
 		    	senderId = is.readInt();
+		    	 System.out.println("Received " + msg + " msg from node " + senderId);
 		    	accept(m, v, senderId);
 		    }
 		    else if (msg.equals(MessageType.ACK)){
 		    	int accNum = is.readInt();
 		    	LogEntry accVal = (LogEntry) is.readObject();
 		    	senderId = is.readInt();
+		    	 System.out.println("Received " + msg + " msg from node " + senderId);
 		    	ack(accNum, accVal, senderId);
 		    }
 		    else if (msg.equals(MessageType.COMMIT)){
 		    	LogEntry v = (LogEntry) is.readObject();
+		    	 System.out.println("Received " + msg + " msg");
 		    	commit(v);
 		    }
 		    is.close();

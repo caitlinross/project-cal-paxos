@@ -1,2 +1,2 @@
-olimpia.dyn.cs.rpi.edu 
-enhasa.local 
+128.213.23.220
+129.161.83.239
