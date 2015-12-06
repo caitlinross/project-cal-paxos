@@ -97,7 +97,7 @@ public class Driver {
 			String action;
 			String name;
 
-			System.out.println("Would you like to add or delete an appointment, print the current calendar, or view entire log? (type 'add', 'delete', 'print', 'log')");
+			System.out.println("Would you like to add or delete an appointment, print the current calendar, view entire log, or send dummy msgs? (type 'add', 'delete', 'print', 'log', 'dummy')");
 			action = in.nextLine().trim();
 			if (action.equals("add")) {
 				int start;
@@ -156,6 +156,9 @@ public class Driver {
 			}
 			else if (action.equals("log")){
 				node.printLog();
+			}
+			else if (action.equals("dummy")){
+				node.sendDummy();
 			}
 			else {
 				System.out.println("Action not recognized, please enter 'add', 'delete', or 'print'");
