@@ -53,7 +53,7 @@ public class Node {
 	 * @param nodeID this nodes id number
 	 * @param recovery is this a recovery startup?	
 	 */
-	public Node(int totalNodes, int port, String[] hostNames, int nodeID, boolean recovery) {
+	public Node(int totalNodes, final int port, String[] hostNames, int nodeID, boolean recovery) {
 		this.port = port;
 		this.hostNames = new ArrayList<String>();
 		for (int i = 0; i<hostNames.length; i++){
@@ -215,10 +215,10 @@ public class Node {
 		*since it will be overwritten each time anyway, only successful versions 
 		*get saved to new logEntry
 		*/
-		if (log.size() > 0) {
+		/*if (log.size() > 0) {
 			calendars = log.get(log.size()-1).getCalendar();
 			currentAppts = log.get(log.size()-1).getAppts();
-		}
+		}*/
 		
 		// check calendar
 		boolean timeAvail = true;
