@@ -107,13 +107,7 @@ public class Node {
 		//this.findingProposer = false;
 		this.savedEntry = null;
 
-		// recover node state if this is restarting from crash
-		if (recovery){
-			restoreNodeState();
-			if (log.size() > 0)
-				updateCalendars(log.get(getMostRecentEntry()));
-			election();
-		}
+		
 		
 		// set up datagram stuff to listen for UDP for Paxos communication
 		Runnable udpThread = new Runnable(){
@@ -149,6 +143,14 @@ public class Node {
 			System.out.println("I am the leader!");
 		else
 			System.out.println("I am NOT the leader");
+		
+		// recover node state if this is restarting from crash
+		if (recovery){
+			restoreNodeState();
+			if (log.size() > 0)
+				updateCalendars(log.get(getMostRecentEntry()));
+			election();
+		}
 		
 	}
 
