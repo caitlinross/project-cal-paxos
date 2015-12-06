@@ -110,7 +110,8 @@ public class Node {
 		// recover node state if this is restarting from crash
 		if (recovery){
 			restoreNodeState();
-			updateCalendars(log.get(getMostRecentEntry()));
+			if (log.size() > 0)
+				updateCalendars(log.get(getMostRecentEntry()));
 			election();
 		}
 		
@@ -325,7 +326,8 @@ public class Node {
 	 */
 	public void deleteOldAppointment(String apptID) {
 		Appointment delAppt = null;
-		updateCalendars(log.get(getMostRecentEntry()));
+		if (log.size() > 0)
+			updateCalendars(log.get(getMostRecentEntry()));
 		synchronized(lock) {
 			for (Appointment appt:this.currentAppts){
 				//find corresponding appointment
@@ -457,7 +459,8 @@ public class Node {
 	 * print out the calendar to the terminal
 	 */
 	public void printCalendar() {
-		updateCalendars(log.get(getMostRecentEntry()));
+		if (log.size() > 0)
+			updateCalendars(log.get(getMostRecentEntry()));
 		//now have set of all appointments event records which are currently in calendar
 		//next: get eRs by day, and print them
 		ArrayList<Appointment> apptList = new ArrayList<Appointment>();
@@ -627,7 +630,8 @@ public class Node {
 				//this.log.add(entry.getLogPos(), entry);
 				LogEntry.fillSet(entry.getLogPos(), entry, log, this.nodeId);
 				saveNodeState();
-				updateCalendars(log.get(getMostRecentEntry()));
+				if (log.size() > 0)
+					updateCalendars(log.get(getMostRecentEntry()));
 				
 				// report that appointment to be added has a conflict to user, or not;
 				// without it will update on the node and user will be able to view up to date calendar
