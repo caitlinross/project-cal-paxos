@@ -764,8 +764,7 @@ public class Node {
 	public void sendPacket(int sendTo, byte[] data){
 		try{
 			DatagramSocket socket = new DatagramSocket();
-			byte[] ipaddr = this.hostNames.get(sendTo).getBytes();
-			InetAddress address = InetAddress.getByAddress(ipaddr); 
+			InetAddress address = InetAddress.getByName(this.hostNames.get(sendTo)); 
 			DatagramPacket packet = new DatagramPacket(data, data.length, address, this.port);
 			socket.send(packet);
 			socket.close();
