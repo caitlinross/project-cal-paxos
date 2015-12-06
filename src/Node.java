@@ -772,6 +772,7 @@ public class Node {
 	public void sendDummy(){
 		for (int i = 0; i < this.numNodes; i++){
 			if (i != this.nodeId){
+				System.out.println("SENDING TCP DUMMY message to node " + i);
 				try {
 					Socket socket = new Socket(hostNames.get(i), port);
 					OutputStream out = socket.getOutputStream();
@@ -793,7 +794,7 @@ public class Node {
 						os.flush();
 						byte[] data = outputStream.toByteArray();
 						// send reply with accNum, accVal
-						System.out.println("Sending DUMMY msg to node " + i);
+						System.out.println("TCP successful; Sending DUMMY msg to node " + i);
 						sendPacket(i, data);
 					
 					} catch (IOException e) {
@@ -843,24 +844,25 @@ public class Node {
 		    	int m = is.readInt();
 		    	LogEntry v = (LogEntry) is.readObject();
 		    	senderId = is.readInt();
-		    	 System.out.println("Received " + msg + " msg from node " + senderId);
+		    	System.out.println("Received " + msg + " msg from node " + senderId);
 		    	accept(m, v, senderId);
 		    }
 		    else if (msg.equals(MessageType.ACK)){
 		    	int accNum = is.readInt();
 		    	LogEntry accVal = (LogEntry) is.readObject();
 		    	senderId = is.readInt();
-		    	 System.out.println("Received " + msg + " msg from node " + senderId);
+		    	System.out.println("Received " + msg + " msg from node " + senderId);
 		    	ack(accNum, accVal, senderId);
 		    }
 		    else if (msg.equals(MessageType.COMMIT)){
 		    	LogEntry v = (LogEntry) is.readObject();
-		    	 System.out.println("Received " + msg + " msg");
+		    	System.out.println("Received " + msg + " msg");
 		    	commit(v);
 		    }
 		    else if (msg.equals(MessageType.DUMMY)){
 		    	int val = is.readInt();
 		    	int from = is.readInt();
+		    	System.out.println("Received UDP " + msg + " msg from " + from);
 		    	if (val == 0){ // need to send dummy response back
 		    		try{
 						// put accVal and accNum 
@@ -872,7 +874,7 @@ public class Node {
 						os.flush();
 						byte[] data = outputStream.toByteArray();
 						// send reply with accNum, accVal
-						System.out.println("Sending DUMMY msg to node " + from);
+						System.out.println("Sending UDP DUMMY msg response to node " + from);
 						sendPacket(from, data);
 					
 					} catch (IOException e) {
