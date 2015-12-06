@@ -9,7 +9,6 @@ import java.util.Set;
  * This object stores details for a given log entry.
  * One log entry is a full calendar (As opposed to an individual event)
  * 
- * TODO add more functionality as necessary?
  */
 @SuppressWarnings("serial")
 public class LogEntry implements Serializable, Comparable<LogEntry> {

@@ -18,11 +18,12 @@ public class Node {
 	private int incAmt; // amount to increment m (proposal numbers) by to have unique numbers
 	private boolean stillUpdating;
 	private DatagramSocket udpSocket;
+	private boolean reportConflict;
 	
 	//leader election vars
 	private int proposerId;
-	private boolean isProposer;
-	private boolean findingProposer;
+	//private boolean isProposer;
+	//private boolean findingProposer;
 	private LogEntry savedEntry;
 	
 	// Paxos vars
@@ -32,7 +33,7 @@ public class Node {
 	private int m;
 	private ArrayList<LogEntry> log; // store log entries in order
 	private int logPos; // which log position to work on
-	private LogEntry newEntry; // entry to try to add 
+	//private LogEntry newEntry; // entry to try to add 
 	private Queue<LogEntry> entryQueue;
 	
 	// keeping track of promise and ack responses
@@ -64,6 +65,7 @@ public class Node {
 		this.stateLog = "nodestate.txt";
 		this.incAmt = totalNodes;
 		this.stillUpdating = false; //TODO make sure to set appropriately when chosen as leader
+		this.setReportConflict(false);
 		
 		this.maxPrepare = 0;
 		this.accNum = -1;
@@ -72,7 +74,7 @@ public class Node {
 		this.log = new ArrayList<LogEntry>();
 		this.logPos = 0;
 
-		this.newEntry = null;
+		//this.newEntry = null;
 		this.entryQueue = new PriorityBlockingQueue<LogEntry>(); // orders based on log position
 
 		
@@ -92,23 +94,24 @@ public class Node {
 		this.currentAppts = new HashSet<Appointment>();  // keep appointments from most recent log entry
 		
 		//default: all nodes running, proposer is highest id
-		//TODO: should we save who the proposer is when we crash? or 
+		
 		//do we automatically assume 4 is the proposer for each 
 		//recovered process and if not do an election? 
 		this.proposerId = this.numNodes-1;
-		if (nodeId == numNodes-1) {
+		/*if (nodeId == numNodes-1) {
 			isProposer = true;
 		}
 		else {
 			isProposer = false;
-		}
-		this.findingProposer = false;
+		}*/
+		//this.findingProposer = false;
 		this.savedEntry = null;
 
 		// recover node state if this is restarting from crash
 		if (recovery){
 			restoreNodeState();
 			updateCalendars(log.get(log.size()-1));
+			election();
 		}
 		
 		// set up datagram stuff to listen for UDP for Paxos communication
@@ -157,6 +160,20 @@ public class Node {
 		return calendars;
 	}
 	
+	/**
+	 * @return the reportConflict
+	 */
+	public boolean isReportConflict() {
+		return reportConflict;
+	}
+
+	/**
+	 * @param reportConflict the reportConflict to set
+	 */
+	public void setReportConflict(boolean reportConflict) {
+		this.reportConflict = reportConflict;
+	}
+
 	/**
 	 * update calendars and currentAppts based on given log entry
 	 * @param e LogEntry to use for updates
@@ -246,7 +263,6 @@ public class Node {
 			// create new log entry with this appt to try to submit
 			int logPos = log.size();
 			newEntry = createLogEntry(newAppt, logPos, this.nodeId);
-			//currentAppts.add(newAppt); // TODO don't think this is needed
 		}		
 		
 		// need to send new LogEntry to leader
@@ -309,7 +325,7 @@ public class Node {
 		return e;
 	}
 
-	/** TODO needs to be updated for Paxos
+	/** 
 	 *  deletes appointment based on given appointment ID
 	 * @param apptID id for the appointment to be deleted
 	 */
@@ -387,17 +403,21 @@ public class Node {
 		if (successSum == 0) {
 			System.out.println("am highest node living");
 			//all other nodes down, is leader by default;
-			isProposer = true;
+			//isProposer = true;
 			proposerId = nodeId;
 			//notify everyone, even down nodes that self is new leader
 			for (int i=0; i<numNodes; i++) {
 				if (i != nodeId) {
 					System.out.println("telling node"+i+"that I am leader");
 					send(i, MessageType.COORDINATOR);
-					findingProposer = false;
+					//findingProposer = false;
 				}
 			}
-			startPaxos(savedEntry);
+			getUpdates(); // make sure all nodes are updated
+			if (savedEntry != null){
+				startPaxos(savedEntry);
+				savedEntry = null;
+			}
 
 		}
 		
@@ -551,7 +571,7 @@ public class Node {
 		} 
 		catch (ConnectException | UnknownHostException ce){ // the leader is down, start a new election
 			savedEntry = entry;
-			findingProposer = true;
+			//findingProposer = true;
 			System.out.println("leader down, starting election");
 			election();
 		}
@@ -599,8 +619,10 @@ public class Node {
 				saveNodeState();
 				updateCalendars(entry);
 				
-				// TODO report that appointment to be added has a conflict to user, or not;
+				// report that appointment to be added has a conflict to user, or not;
 				// without it will update on the node and user will be able to view up to date calendar
+				this.setReportConflict(true);
+				
 			}
 			else if (msg.equals(MessageType.ELECTION)){
 				senderId = objectInput.readInt();
@@ -611,15 +633,19 @@ public class Node {
 				}
 			}
 			else if (msg.equals(MessageType.OK)){
-				isProposer = false;
+				//isProposer = false;
+				proposerId = -1;  // unsure of proposer, but it's definitely not me
 			}
 			else if (msg.equals(MessageType.COORDINATOR)){
 				senderId = objectInput.readInt();
 				proposerId = senderId;
 				System.out.println("Received " + msg + " msg from node " + senderId);
-				isProposer = false;
-				findingProposer = false;
-				sendProposal(savedEntry);
+				//isProposer = false;
+				//findingProposer = false;
+				if (savedEntry != null){
+					sendProposal(savedEntry);
+					savedEntry = null;
+				}
 			}
 			
 			objectInput.close();
@@ -639,7 +665,6 @@ public class Node {
 		for (Appointment a:newEntry.getAppts()){
 			tmpSet.add(a);
 		}
-		HashSet<Appointment> delSet = new HashSet<Appointment>();
 		
 		// create a tmpCal for checking for conflicts
 		int[][][] tmpCal = new int[numNodes][7][48];
@@ -810,7 +835,7 @@ public class Node {
 		
 	}
 	
-	/** TODO needs to be called when leader is selected!
+	/** needs to be called when leader is selected!
 	 * leader should use this at beginning or whenever a new leader is selected
 	 * to get all log entries
 	 * 
@@ -959,7 +984,6 @@ public class Node {
 			if (allNull){ // no value has been accepted for this log entry
 				stillUpdating = false;
 				// choose my own value to send
-				// TODO probably need to pull this off of a queue
 				if (!entryQueue.isEmpty())
 					v = entryQueue.poll();
 				else // I think this shouldn't happen 

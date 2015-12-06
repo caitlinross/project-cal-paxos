@@ -160,19 +160,13 @@ public class Driver {
 				System.out.println("Action not recognized, please enter 'add', 'delete', or 'print'");
 			}
 			
-			// TODO we might want something similar to this for an appointment that the leader determines can't be scheduled
-			// before asking for next decision, report any appointments that weren't able to be scheduled
-			/*if (node.isCantSched()){
+			// we might want something similar to this for an appointment that the leader determines can't be scheduled
+			// before asking for next decision, report there was a conflict
+			if (node.isReportConflict()){
 				System.out.println("\n-------- WARNING --------");
-				for (Appointment a:node.getBadAppts()){
-					System.out.println("Can't schedule appointment ID: " + a.getApptID());
-					System.out.println("Name: " + a.getName());
-					System.out.println("time: " + a.getStart() + a.getsAMPM() + " - " + a.getEnd() + a.geteAMPM());
-					System.out.println("\n");
-				}
-				node.resetBadAppts();
-				node.setCantSched(false);
-			}*/
+				System.out.println("The appointment conflicted; view the updated calendar and try again.");
+				node.setReportConflict(false);
+			}
 
 		}
 	}
