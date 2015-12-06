@@ -299,6 +299,15 @@ public class Node {
 		return e;
 	}
 	
+	public LogEntry createEntryDel(Appointment delAppt, int logPos, int owner){
+		LogEntry e = new LogEntry(logPos, owner);
+		for (Appointment appt:currentAppts){
+			if (!appt.equals(delAppt))
+				e.addAppt(appt);
+		}
+		e.setUnknown(false);
+		return e;
+	}
 
 	/** TODO needs to be updated for Paxos
 	 *  deletes appointment based on given appointment ID
@@ -307,10 +316,10 @@ public class Node {
 	public void deleteOldAppointment(String apptID) {
 		Appointment delAppt = null;
 		//get calendar and appt list from latest log entry
-		if (log.size() > 0) {
+		/*if (log.size() > 0) {
 			calendars = log.get(log.size()-1).getCalendar();
 			currentAppts = log.get(log.size()-1).getAppts();
-		}
+		}*/
 		synchronized(lock) {
 			for (Appointment appt:this.currentAppts){
 				//find corresponding appointment
@@ -320,7 +329,7 @@ public class Node {
 			}
 			
 			if (delAppt != null){
-				LogEntry e = createLogEntry(delAppt, log.size(), this.nodeId);
+				LogEntry newEntry = createEntryDel(delAppt, log.size(), this.nodeId);
 				// need to send new LogEntry to leader
 				if (newEntry != null && this.nodeId != this.proposerId){
 					sendProposal(newEntry);
@@ -347,20 +356,6 @@ public class Node {
 					}
 
 				}
-				// send message to distinguished proposer, unless self is proposer
-				if (proposerId != nodeId ) {
-					int success = -1;
-					//success = sendCalendar(proposerId, 4, calendars, currentAppts);
-
-					//leader is down, run leader election and try again
-					if (success != 1) {
-						election();
-						//sendCalendar(proposerId, 4, calendars, currentAppts);
-					}
-				}
-				else {
-					//run paxos
-				}
 
 			}
 		}
@@ -381,7 +376,7 @@ public class Node {
 				//send 'election' to all nodes with higher ids
 				//success = 1 if message sent, 0 if other node is down
 				System.out.println("sending election to node"+i);
-				send(i, MessageType.ELECTION);
+				success = send(i, MessageType.ELECTION);
 
 				//tally number of successful messages sent
 				successSum += success;
@@ -644,6 +639,7 @@ public class Node {
 		for (Appointment a:newEntry.getAppts()){
 			tmpSet.add(a);
 		}
+		HashSet<Appointment> delSet = new HashSet<Appointment>();
 		
 		// create a tmpCal for checking for conflicts
 		int[][][] tmpCal = new int[numNodes][7][48];
@@ -665,9 +661,10 @@ public class Node {
 			}
 			else {// not in tmpSet, means this appointment has been deleted
 				// don't add to tmpCal
-				// TODO handle this appropriately
+				// This case doesn't need to do anything
 			}
 		}
+		
 		
 		// any remaining appts in tmpAppts are new and should be checked for conflicts
 		boolean conflict = false;
@@ -798,7 +795,7 @@ public class Node {
 	 */
 	public void sendPacket(int sendTo, byte[] data){
 		try{
-			Thread.sleep(2000); // to help with flow control
+			Thread.sleep(5000); // to help with flow control
 			//DatagramSocket socket = new DatagramSocket();
 			InetAddress address = InetAddress.getByName(this.hostNames.get(sendTo)); 
 			System.out.println("Sending to IP address " + this.hostNames.get(sendTo));
