@@ -1,2 +1,2 @@
-129.161.83.239
-128.213.23.220
+enhasa.local
+olimpia.dyn.cs.rpi.edu

@@ -44,7 +44,7 @@ public class Driver {
 			e.printStackTrace();
 		}
 	    
-		final int port = 4444;
+		final int port = 4445;
 
 		
 		InetAddress inetAddr;
@@ -97,7 +97,7 @@ public class Driver {
 		        try {
 		        	socket = new DatagramSocket(port);
 		            while (true) {
-		            	byte[] buf = new byte[2000];  
+		            	byte[] buf = new byte[10000];  
 		            	final DatagramPacket packet = new DatagramPacket(buf, buf.length);
 		            	socket.receive(packet);
 		            	Runnable runnable = new Runnable() {
