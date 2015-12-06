@@ -352,6 +352,7 @@ public class Node {
 			if (i > nodeId){
 				//send 'election' to all nodes with higher ids
 				//success = 1 if message sent, 0 if other node is down
+				System.out.println("sending election to node"+i);
 				send(i, MessageType.ELECTION);
 
 				//tally number of successful messages sent
@@ -361,18 +362,20 @@ public class Node {
 			}
 		}
 		if (successSum == 0) {
+			System.out.println("am highest node living");
 			//all other nodes down, is leader by default;
 			isProposer = true;
 			proposerId = nodeId;
 			//notify everyone, even down nodes that self is new leader
 			for (int i=0; i<numNodes; i++) {
 				if (i != nodeId) {
+					System.out.println("telling node"+i+"that I am leader");
 					send(i, MessageType.COORDINATOR);
 					findingProposer = false;
-					startPaxos(savedEntry);
 				}
 			}
-			
+			startPaxos(savedEntry);
+
 		}
 		
 	}
@@ -524,6 +527,7 @@ public class Node {
 		catch (ConnectException | UnknownHostException ce){ // the leader is down, start a new election
 			savedEntry = entry;
 			findingProposer = true;
+			System.out.println("leader down, starting election");
 			election();
 		}
 		catch (IOException e) {
