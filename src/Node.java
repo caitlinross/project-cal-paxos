@@ -19,6 +19,7 @@ public class Node {
 	private boolean stillUpdating;
 	private DatagramSocket udpSocket;
 	private boolean reportConflict;
+	private int udpPort;
 	
 	//leader election vars
 	private int proposerId;
@@ -108,14 +109,14 @@ public class Node {
 		this.savedEntry = null;
 
 		
-		
+		this.udpPort = 6999;
 		// set up datagram stuff to listen for UDP for Paxos communication
 		Runnable udpThread = new Runnable(){
 			public synchronized void run() {
 				System.out.println("Start listening for other nodes, UDP");
 				final DatagramSocket socket;
 		        try {
-		        	socket = new DatagramSocket(port);
+		        	socket = new DatagramSocket(udpPort);
 		            while (true) {
 		            	byte[] buf = new byte[10000];  
 		            	final DatagramPacket packet = new DatagramPacket(buf, buf.length);
@@ -130,7 +131,7 @@ public class Node {
 		            }
 		        } 
 		        catch (IOException e) {
-					 System.out.println("Exception caught when trying to listen on port " + port);
+					 System.out.println("Exception caught when trying to listen on port " + udpPort);
 				    System.out.println(e.getMessage());
 					e.printStackTrace();
 				}
@@ -914,7 +915,7 @@ public class Node {
 			//DatagramSocket socket = new DatagramSocket();
 			InetAddress address = InetAddress.getByName(this.hostNames.get(sendTo)); 
 			System.out.println("Sending to IP address " + this.hostNames.get(sendTo));
-			DatagramPacket packet = new DatagramPacket(data, data.length, address, this.port);
+			DatagramPacket packet = new DatagramPacket(data, data.length, address, this.udpPort);
 			udpSocket.send(packet);
 			//udpSocket.close();
 		} catch (IOException e) {
