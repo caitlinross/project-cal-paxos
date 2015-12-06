@@ -678,7 +678,8 @@ public class Node {
 		
 		// create a tmpCal for checking for conflicts
 		int[][][] tmpCal = new int[numNodes][7][48];
-		updateCalendars(log.get(getMostRecentEntry()));
+		if (log.size() > 0)
+			updateCalendars(log.get(getMostRecentEntry()));
 		// for each appt in currentAppts, if appt in tmpAppts, delete from tmpAppts
 		// else remember that this is a deleted appointment
 		for (Appointment a:currentAppts){
