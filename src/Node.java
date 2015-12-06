@@ -716,7 +716,7 @@ public class Node {
 							break;
 						}
 					}
-					
+					time++;
 				}
 				if (conflict)
 					break;
