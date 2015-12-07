@@ -401,6 +401,9 @@ public class Node {
 			//System.out.println("am highest node living");
 			//all other nodes down, is leader by default;
 			//isProposer = true;
+			boolean update = true;
+			if (proposerId == nodeId) // leader didn't change
+				update = false;
 			proposerId = nodeId;
 			//notify everyone, even down nodes that self is new leader
 			for (int i=0; i<numNodes; i++) {
@@ -410,7 +413,8 @@ public class Node {
 					//findingProposer = false;
 				}
 			}
-			getUpdates(); // make sure all nodes are updated
+			if (update) // this node wasn't already leader
+				getUpdates(); // make sure all nodes are updated
 			if (savedEntry != null){
 				startPaxos(savedEntry);
 				savedEntry = null;
