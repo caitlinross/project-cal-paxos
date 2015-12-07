@@ -150,10 +150,10 @@ public class Node {
 			e.printStackTrace();
 		}
 		
-		if (this.proposerId == this.nodeId)
-			System.out.println("I am the leader!");
-		else
-			System.out.println("I am NOT the leader");
+		//if (this.proposerId == this.nodeId)
+		//	System.out.println("I am the leader!");
+		//else
+		//	System.out.println("I am NOT the leader");
 		
 		// recover node state if this is restarting from crash
 		if (recovery){
@@ -258,15 +258,6 @@ public class Node {
 		
 		// create appointment object
 		if (timeAvail){
-			/*time = startIndex;
-			while(time < endIndex){
-				for(Integer node:nodes){
-					synchronized(lock){
-						this.calendars[node][day.ordinal()][time] = 1;
-					}
-				}
-				time++;
-			}*/
 			newAppt = new Appointment(name, day, start, end, sAMPM, eAMPM, nodes, this.nodeId);
 			// create new log entry with this appt to try to submit
 			int logPos = log.size();
@@ -396,7 +387,7 @@ public class Node {
 			if (i > nodeId){
 				//send 'election' to all nodes with higher ids
 				//success = 1 if message sent, 0 if other node is down
-				System.out.println("sending election to node"+i);
+				//System.out.println("sending election to node"+i);
 				success = send(i, MessageType.ELECTION);
 
 				//tally number of successful messages sent
@@ -407,14 +398,14 @@ public class Node {
 		}
 		if (successSum == 0 && !this.foundProposer) {
 			this.foundProposer = true;
-			System.out.println("am highest node living");
+			//System.out.println("am highest node living");
 			//all other nodes down, is leader by default;
 			//isProposer = true;
 			proposerId = nodeId;
 			//notify everyone, even down nodes that self is new leader
 			for (int i=0; i<numNodes; i++) {
 				if (i != nodeId) {
-					System.out.println("telling node"+i+"that I am leader");
+					//System.out.println("telling node "+i+" that I am leader");
 					send(i, MessageType.COORDINATOR);
 					//findingProposer = false;
 				}
@@ -628,7 +619,7 @@ public class Node {
 			
 			if (msg.equals(MessageType.PROPOSE)){
 				senderId = objectInput.readInt();
-				System.out.println("Received " + msg + " msg from node " + senderId);
+				//System.out.println("Received " + msg + " msg from node " + senderId);
 				entry = (LogEntry) objectInput.readObject();
 				if (entryQueue.isEmpty())
 					checkProposal(entry);
@@ -654,14 +645,14 @@ public class Node {
 			}
 			else if (msg.equals(MessageType.ELECTION)){
 				senderId = objectInput.readInt();
-				System.out.println("Received " + msg + " msg from node " + senderId);
+				//System.out.println("Received " + msg + " msg from node " + senderId);
 				if (nodeId > senderId){
 					send(senderId, MessageType.OK);
 					election();
 				}
 			}
 			else if (msg.equals(MessageType.OK)){
-				System.out.println("Received " + msg + " msg");
+				//System.out.println("Received " + msg + " msg");
 				//isProposer = false;
 				proposerId = -1;  // unsure of proposer, but it's definitely not me
 			}
@@ -790,7 +781,7 @@ public class Node {
 	public void sendDummy(){
 		for (int i = 0; i < this.numNodes; i++){
 			if (i != this.nodeId){
-				System.out.println("SENDING TCP DUMMY message to node " + i);
+				//System.out.println("SENDING TCP DUMMY message to node " + i);
 				try {
 					Socket socket = new Socket(hostNames.get(i), port);
 					OutputStream out = socket.getOutputStream();
@@ -812,7 +803,7 @@ public class Node {
 						os.flush();
 						byte[] data = outputStream.toByteArray();
 						// send reply with accNum, accVal
-						System.out.println("TCP successful; Sending DUMMY msg to node " + i);
+						//System.out.println("TCP successful; Sending DUMMY msg to node " + i);
 						sendPacket(i, data);
 					
 					} catch (IOException e) {
@@ -848,28 +839,28 @@ public class Node {
 		    	int m = is.readInt();
 		    	int logPos = is.readInt();
 		    	senderId = is.readInt();
-		    	System.out.println("Received " + msg + " msg from node " + senderId);
+		    	//System.out.println("Received " + msg + " msg from node " + senderId);
 		    	prepare(m, logPos, senderId);
 		    }
 		    else if (msg.equals(MessageType.PROMISE)){
 		    	int accNum = is.readInt();
 		    	LogEntry accVal = (LogEntry) is.readObject();
 		    	senderId = is.readInt();
-		    	System.out.println("Received " + msg + " msg from node " + senderId);
+		    	//System.out.println("Received " + msg + " msg from node " + senderId);
 		    	promise(accNum, accVal, senderId);
 		    }
 		    else if (msg.equals(MessageType.ACCEPT)){
 		    	int m = is.readInt();
 		    	LogEntry v = (LogEntry) is.readObject();
 		    	senderId = is.readInt();
-		    	System.out.println("Received " + msg + " msg from node " + senderId);
+		    	//System.out.println("Received " + msg + " msg from node " + senderId);
 		    	accept(m, v, senderId);
 		    }
 		    else if (msg.equals(MessageType.ACK)){
 		    	int accNum = is.readInt();
 		    	LogEntry accVal = (LogEntry) is.readObject();
 		    	senderId = is.readInt();
-		    	System.out.println("Received " + msg + " msg from node " + senderId);
+		    	//System.out.println("Received " + msg + " msg from node " + senderId);
 		    	ack(accNum, accVal, senderId);
 		    }
 		    else if (msg.equals(MessageType.COMMIT)){
@@ -880,7 +871,7 @@ public class Node {
 		    else if (msg.equals(MessageType.DUMMY)){
 		    	int val = is.readInt();
 		    	int from = is.readInt();
-		    	System.out.println("Received UDP " + msg + " msg from " + from);
+		    	//System.out.println("Received UDP " + msg + " msg from " + from);
 		    	if (val == 0){ // need to send dummy response back
 		    		try{
 						// put accVal and accNum 
@@ -892,11 +883,10 @@ public class Node {
 						os.flush();
 						byte[] data = outputStream.toByteArray();
 						// send reply with accNum, accVal
-						System.out.println("Sending UDP DUMMY msg response to node " + from);
+						//System.out.println("Sending UDP DUMMY msg response to node " + from);
 						sendPacket(from, data);
 					
 					} catch (IOException e) {
-						// TODO probably remove before submitting, along with other dummy stacktrace prints
 						e.printStackTrace();
 					}
 		    	}
@@ -918,10 +908,10 @@ public class Node {
 	 */
 	public void sendPacket(int sendTo, byte[] data){
 		try{
-			Thread.sleep(5000); // to help with flow control
+			Thread.sleep(2500); // to help with flow control
 			//DatagramSocket socket = new DatagramSocket();
 			InetAddress address = InetAddress.getByName(this.hostNames.get(sendTo)); 
-			System.out.println("Sending to IP address " + this.hostNames.get(sendTo));
+			//System.out.println("Sending to IP address " + this.hostNames.get(sendTo));
 			DatagramPacket packet = new DatagramPacket(data, data.length, address, this.udpPort);
 			udpSocket.send(packet);
 			//udpSocket.close();
@@ -939,6 +929,7 @@ public class Node {
 	 * 
 	 */
 	public void getUpdates(){
+		System.out.println("Starting updates");
 		for (LogEntry entry:log){
 			if (entry.isUnknown()){ // need to get information about this entry
 				// kick-off synod alg for each log position that the leader doesn't have info for
@@ -980,7 +971,7 @@ public class Node {
 			// send promise message to all other nodes
 			for (int i = 0; i < this.numNodes; i++){
 				if (this.nodeId != i) {
-					System.out.println("Sending PREPARE msg to node " + i);
+					//System.out.println("Sending PREPARE msg to node " + i);
 					sendPacket(i, data);
 				}
 			}
@@ -1013,7 +1004,7 @@ public class Node {
 			// send reply with m and v
 			for (int i = 0; i < this.numNodes; i++){
 				if (this.nodeId != i) {
-					System.out.println("Sending ACCEPT msg to node " + i);
+					//System.out.println("Sending ACCEPT msg to node " + i);
 					sendPacket(i, data);
 				}
 			}
@@ -1043,7 +1034,7 @@ public class Node {
 				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
-				System.out.println("Sending PROMISE msg to node " + senderId);
+				//System.out.println("Sending PROMISE msg to node " + senderId);
 				sendPacket(senderId, data);
 			
 			} catch (IOException e) {
@@ -1118,7 +1109,7 @@ public class Node {
 				// send reply with m and v
 				for (int i = 0; i < this.numNodes; i++){
 					if (this.nodeId != i) {
-						System.out.println("Sending ACCEPT msg to node " + i);
+						//System.out.println("Sending ACCEPT msg to node " + i);
 						sendPacket(i, data);
 					}
 				}
@@ -1153,7 +1144,7 @@ public class Node {
 				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with accNum, accVal
-				System.out.println("Sending ACK msg to node " + senderId);
+				//System.out.println("Sending ACK msg to node " + senderId);
 				sendPacket(senderId, data);
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -1198,9 +1189,10 @@ public class Node {
 				os.flush();
 				byte[] data = outputStream.toByteArray();
 				// send reply with v
+				System.out.println("Begin sending COMMIT msgs");
 				for (int i = 0; i < this.numNodes; i++){
 					if (this.nodeId != i) {
-						System.out.println("Sending COMMIT msg to node " + i);
+						//System.out.println("Sending COMMIT msg to node " + i);
 						sendPacket(i, data);
 					}
 				}
