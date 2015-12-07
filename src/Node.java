@@ -406,8 +406,11 @@ public class Node {
 			//all other nodes down, is leader by default;
 			//isProposer = true;
 			boolean update = true;
+			boolean leaderChanged = false;
 			if (proposerId == nodeId) // leader didn't change
 				update = false;
+			else
+				leaderChanged = true;
 			proposerId = nodeId;
 			//notify everyone, even down nodes that self is new leader
 			for (int i=0; i<numNodes; i++) {
@@ -421,6 +424,9 @@ public class Node {
 				getUpdates(); // make sure all nodes are updated
 				electionStarter = false;
 			}
+			if (update && leaderChanged)
+				getUpdates();
+			
 			if (savedEntry != null){
 				startPaxos(savedEntry);
 				savedEntry = null;
