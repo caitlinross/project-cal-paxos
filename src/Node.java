@@ -22,6 +22,7 @@ public class Node {
 	private int udpPort;
 	private boolean promiseMaj;
 	private boolean ackMaj;
+	private boolean electionStarter;
 	
 	//leader election vars
 	private int proposerId;
@@ -158,10 +159,13 @@ public class Node {
 		// recover node state if this is restarting from crash
 		if (recovery){
 			restoreNodeState();
+			this.electionStarter = true;
 			if (log.size() > 0)
 				updateCalendars(log.get(getMostRecentEntry()));
 			election();
 		}
+		else 
+			this.electionStarter = false;
 		
 	}
 
@@ -413,8 +417,10 @@ public class Node {
 					//findingProposer = false;
 				}
 			}
-			if (update) // this node wasn't already leader
+			if (update && electionStarter){ // this node wasn't already leader
 				getUpdates(); // make sure all nodes are updated
+				electionStarter = false;
+			}
 			if (savedEntry != null){
 				startPaxos(savedEntry);
 				savedEntry = null;
@@ -569,7 +575,7 @@ public class Node {
 		    LogEntry.fillSet(e.getLogPos(), e, log, this.nodeId);
 		    reader.close();
 		} catch (FileNotFoundException e2) {
-			e2.printStackTrace();
+			//e2.printStackTrace();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -595,6 +601,7 @@ public class Node {
 			savedEntry = entry;
 			//findingProposer = true;
 			System.out.println("leader down, starting election");
+			this.electionStarter = true;
 			election();
 		}
 		catch (IOException e) {
